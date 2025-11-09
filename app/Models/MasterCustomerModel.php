@@ -20,4 +20,9 @@ class MasterCustomerModel extends Model
         'updated_at',
         'created_at',
     ];
+
+    public function pengiriman()
+    {
+        return $this->hasMany(TransaksipengirimanModel::class, 'id_customer', 'id_customer');
+    }
 }

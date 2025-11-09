@@ -33,9 +33,9 @@ class MasterbarangRequest extends FormRequest
             ],
 
             'nama_barang'      => 'required|string|max:150',
+            'kapasitas'      => 'required|string|max:50',
             'harga_jual'       => 'required|integer|min:0',
             'stok'             => 'required|integer|min:0',
-            'id_kategori' => 'sometimes|nullable',
 
         ];
     }

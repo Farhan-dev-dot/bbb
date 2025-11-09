@@ -16,6 +16,7 @@ class MasterBarangModel extends Model
         'id_kategori',
         'kode_barang',
         'nama_barang',
+        'kapasitas',
         'harga_jual',
         'stok',
         'updated_at',
@@ -26,9 +27,4 @@ class MasterBarangModel extends Model
         'harga_jual' => 'integer',
         'stok' => 'integer',
     ];
-
-    public function kategori()
-    {
-        return $this->belongsTo(MasterKategoriModel::class, 'id_kategori', 'id_kategori');
-    }
 }

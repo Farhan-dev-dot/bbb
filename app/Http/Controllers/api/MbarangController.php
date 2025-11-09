@@ -47,7 +47,6 @@ class MbarangController extends Controller
     {
         try {
             $barangs = MasterBarangModel::create($request->validated());
-            $barangs->load('kategori');
 
             return response()->json([
                 'status' => true,
@@ -69,8 +68,6 @@ class MbarangController extends Controller
     public function show(MasterBarangModel $mbarang)
     {
         try {
-            $mbarang->load('kategori');
-
             return response()->json([
                 'status' => true,
                 'message' => 'Data barang berhasil ditemukan',
@@ -92,7 +89,6 @@ class MbarangController extends Controller
     {
         try {
             $mbarang->update($request->validated());
-            $mbarang->load('kategori');
 
             return response()->json([
                 'status' => true,

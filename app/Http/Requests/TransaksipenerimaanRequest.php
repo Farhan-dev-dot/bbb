@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class MasterkategoriRequest extends FormRequest
+class TransaksipenerimaanRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -22,7 +22,11 @@ class MasterkategoriRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nama_kategori' => 'required|string|max:100',
+            'id_barang' => 'required|integer',
+            'tanggal_penerimaan' => 'required|date',
+            'tabung_isi' => 'sometimes|integer',
+            'tabung_kosong' => 'sometimes|integer',
+            'pinjam_tabung' => 'sometimes|integer',
         ];
     }
 }

@@ -25,7 +25,6 @@ class MCustomerController extends Controller
                     'master_customers' => []
                 ], 200);
             }
-
             return response()->json([
                 'status' => true,
                 'message' => 'Data customer berhasil diambil',
@@ -111,7 +110,6 @@ class MCustomerController extends Controller
     {
         try {
             $mcustomer->delete();
-
             return response()->json([
                 'status' => true,
                 'message' => 'Data customer berhasil dihapus'
