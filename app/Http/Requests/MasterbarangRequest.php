@@ -13,7 +13,7 @@ class MasterbarangRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        return false;
     }
 
     /**
@@ -28,15 +28,14 @@ class MasterbarangRequest extends FormRequest
                 'required',
                 'string',
                 'max:50',
-                Rule::unique('dbo_barang', 'kode_barang')
+                Rule::unique('dbo_master_barang', 'kode_barang')
                     ->ignore(optional($this->route('mbarang'))->id_barang, 'id_barang')
             ],
 
             'nama_barang'      => 'required|string|max:150',
             'kapasitas'      => 'required|string|max:50',
             'harga_jual'       => 'required|integer|min:0',
-            'stok'             => 'required|integer|min:0',
-
+            'stok_tabung'             => 'required|integer|min:0',
         ];
     }
 }

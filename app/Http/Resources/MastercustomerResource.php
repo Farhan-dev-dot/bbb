@@ -19,8 +19,7 @@ class MastercustomerResource extends JsonResource
             'kode_customer' => $this->kode_customer,
             'nama_customer' => $this->nama_customer,
             'alamat' => $this->alamat,
-            'no_telp' => $this->no_telp,
-            'email' => $this->email,
+            'telepon' => $this->telepon,
         ];
     }
 }

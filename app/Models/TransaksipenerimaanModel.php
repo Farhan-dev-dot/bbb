@@ -21,8 +21,6 @@ class TransaksipenerimaanModel extends Model
         'updated_at',
     ];
 
-
-
     public function barang()
     {
         return $this->belongsTo(MasterBarangModel::class, 'id_barang', 'id_barang');

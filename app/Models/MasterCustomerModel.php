@@ -15,8 +15,7 @@ class MasterCustomerModel extends Model
         'kode_customer',
         'nama_customer',
         'alamat',
-        'no_telp',
-        'email',
+        'telepon',
         'updated_at',
         'created_at',
     ];

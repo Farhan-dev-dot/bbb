@@ -16,7 +16,7 @@ class MbarangController extends Controller
     public function index()
     {
         try {
-            $barangs = MasterBarangModel::with('kategori')->paginate(10);
+            $barangs = MasterBarangModel::paginate(10);
 
             if ($barangs->isEmpty()) {
                 return response()->json([

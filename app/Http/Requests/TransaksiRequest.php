@@ -3,8 +3,9 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
-class TransaksipengirimanRequest extends FormRequest
+class TransaksiRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -23,15 +24,17 @@ class TransaksipengirimanRequest extends FormRequest
     {
         return [
             'id_barang' => 'required',
-            'id_customer' => 'required|integer',
+            'id_customer' => 'required',
             'tanggal_pengiriman' => 'required|date',
-            'lokasi_pengiriman' => 'required|string|max:255',
-            'penerima' => 'required|string|max:255',
-            'tabung_isi' => 'nullable|integer|min:0',
-            'tabung_kosong' => 'nullable|integer|min:0',
+            'pengirim' => 'nullable|string|max:225', // Sesuai database varchar(225)
+            'alamat' => 'nullable|string|max:255',
+            'jumlah_isi' => 'required|integer|min:0',
+            'jumlah_kosong' => 'required|integer|min:0',
             'pinjam_tabung' => 'nullable|integer|min:0',
-            'total_harga' => 'nullable|integer|min:0',
-            'keterangan' => 'nullable|string|max:500',
+            'harga_satuan' => 'required|numeric|min:0',
+            'keterangan' => 'required|string|max:150',
+            'status' => 'required',
+
         ];
     }
 }

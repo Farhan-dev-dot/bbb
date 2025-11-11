@@ -4,14 +4,14 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class TransaksipenerimaanRequest extends FormRequest
+class StokRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
      */
     public function authorize(): bool
     {
-        return true;
+        return false;
     }
 
     /**
@@ -22,11 +22,7 @@ class TransaksipenerimaanRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id_barang' => 'required|integer',
-            'tanggal_penerimaan' => 'required|date',
-            'tabung_isi' => 'sometimes|integer',
-            'tabung_kosong' => 'sometimes|integer',
-            'pinjam_tabung' => 'sometimes|integer',
+            //
         ];
     }
 }

@@ -20,8 +20,7 @@ class MasterbarangResource extends JsonResource
             'nama_barang' => $this->nama_barang,
             'kapasistas' => $this->kapasitas,
             'harga_jual' => $this->harga_jual,
-            'stok' => $this->stok,
-            "barang" => new TransaksipenerimaanResource($this->whenLoaded('barang')),
+            'stok_tabung' => $this->stok_tabung,
         ];
     }
 }
