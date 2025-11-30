@@ -37,17 +37,21 @@ class AuthController extends Controller
         $credentials = $request->only('email', 'password');
 
         if (!$token = auth('api')->attempt($credentials)) {
-            return response()->json(['error' => 'Unauthorized'], 401);
+            return response()->json([
+                'error' => 'Unauthorized',
+                'message' => 'email atau password salah',
+                'status' => false
+            ], 401);
         }
 
         return $this->respondWithToken($token);
     }
 
     // Get user profile
-    public function profile()
-    {
-        return response()->json(auth('api')->user());
-    }
+    // public function profile()
+    // {
+    //     return response()->json(auth('api')->user());
+    // }
 
     // Logout user (invalidate token)
     public function logout()

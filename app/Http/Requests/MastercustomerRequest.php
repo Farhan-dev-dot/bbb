@@ -12,7 +12,7 @@ class MastercustomerRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -22,7 +22,21 @@ class MastercustomerRequest extends FormRequest
      */
     public function rules(): array
     {
+        $customerId = null;
+
+        $segments = $this->segments();
+        $masterCustomerIndex = array_search('master-customer', $segments);
+        if ($masterCustomerIndex !== false && isset($segments[$masterCustomerIndex + 1])) {
+            $customerId = $segments[$masterCustomerIndex + 1];
+        }
         return [
+            'kode_customer' => [
+                'sometimes',
+                'string',
+                'max:50',
+                Rule::unique('dbo_customer', 'kode_customer')
+                    ->ignore($customerId, 'id_customer')
+            ],
             'nama_customer' => 'required|string|max:150',
             'alamat' => 'sometimes|nullable|string|max:255',
             'telepon' => 'sometimes|nullable|string|max:20',

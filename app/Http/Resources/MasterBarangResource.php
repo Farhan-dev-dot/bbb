@@ -16,11 +16,13 @@ class MasterbarangResource extends JsonResource
     {
         return [
             'id_barang' => $this->id_barang,
-            'kode_barang' => $this->kode_barang,
             'nama_barang' => $this->nama_barang,
-            'kapasistas' => $this->kapasitas,
+            'kode_barang' => $this->kode_barang,
+            'kapasitas' => $this->kapasitas,
             'harga_jual' => $this->harga_jual,
-            'stok_tabung' => $this->stok_tabung,
+            'stok_tabung_isi' => $this->stok_tabung_isi,
+            'stok_tabung_kosong' => $this->stok_tabung_kosong,
+
         ];
     }
 }

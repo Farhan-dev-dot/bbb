@@ -13,7 +13,7 @@ class MasterbarangRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -23,19 +23,46 @@ class MasterbarangRequest extends FormRequest
      */
     public function rules(): array
     {
+        $barangId = null;
+
+        // Ambil ID dari URL segments
+        $segments = $this->segments();
+        $masterBarangIndex = array_search('master-barang', $segments);
+        if ($masterBarangIndex !== false && isset($segments[$masterBarangIndex + 1])) {
+            $barangId = $segments[$masterBarangIndex + 1];
+        }
+
+        // Rules untuk update (semua field optional kecuali yang diubah)
+        if ($this->isMethod('PUT') || $this->isMethod('PATCH')) {
+            return [
+                'kode_barang' => [
+                    'nullable',
+                    'string',
+                    'max:50',
+                    Rule::unique('dbo_master_barang', 'kode_barang')
+                        ->ignore($barangId, 'id_barang')
+                ],
+                'nama_barang'         => 'sometimes|string|max:150',
+                'kapasitas'        => 'sometimes|string|max:50',
+                'harga_jual'       => 'sometimes|integer|min:0',
+                'stok_tabung_isi'  => 'sometimes|integer|min:0',
+                'stok_tabung_kosong' => 'sometimes|integer|min:0',
+            ];
+        }
+
+        // Rules untuk create (semua field required)
         return [
             'kode_barang' => [
-                'required',
+                'nullable', // ubah dari 'required' ke 'nullable'
                 'string',
                 'max:50',
                 Rule::unique('dbo_master_barang', 'kode_barang')
-                    ->ignore(optional($this->route('mbarang'))->id_barang, 'id_barang')
             ],
-
             'nama_barang'      => 'required|string|max:150',
-            'kapasitas'      => 'required|string|max:50',
+            'kapasitas'        => 'required|string|max:50',
             'harga_jual'       => 'required|integer|min:0',
-            'stok_tabung'             => 'required|integer|min:0',
+            'stok_tabung_isi'  => 'required|integer|min:0',
+            'stok_tabung_kosong' => 'required|integer|min:0',
         ];
     }
 }
