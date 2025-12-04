@@ -5,6 +5,7 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Models\BarangMasukModel;
 use App\Models\MasterBarangModel;
+use App\Models\MasterCustomerModel;
 use App\Models\RiwayatStokModel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -99,73 +100,86 @@ class BarangMasukController extends Controller
         }
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         $request->validate([
             'data' => 'required|array|min:1',
-            'data.*.id_barang'     => 'required',
-            'data.*.id_customer'   => 'sometimes',
-            'data.*.jumlah_isi'    => 'required|integer|min:0',
+            'data.*.id_barang' => 'required|exists:dbo_master_barang,id_barang',
+            'data.*.nama_customer' => 'required|string|max:255',
+            'data.*.alamat' => 'required|string|max:500',
+            'data.*.email' => 'required|email|max:255',
+            'data.*.no_telfon' => 'required|string|max:20',
+            'data.*.jumlah_isi' => 'required|integer|min:0',
             'data.*.jumlah_kosong' => 'required|integer|min:0',
+            'data.*.keterangan' => 'nullable|string|max:255',
             'data.*.tanggal_masuk' => 'required|date',
         ]);
-
-
 
         DB::beginTransaction();
 
         try {
-
             $result = [];
 
             foreach ($request->data as $item) {
+                // 1. SELALU BUAT CUSTOMER BARU
+                $newCustomer = MasterCustomerModel::create([
+                    'nama_customer' => $item['nama_customer'],
+                    'alamat' => $item['alamat'],
+                    'email' => $item['email'],
+                    'telepon' => $item['no_telfon'],
+                ]);
+                $customerId = $newCustomer->id_customer;
 
-                // 1. Insert barang masuk
+                // 2. Insert barang masuk
                 $barangMasuk = BarangMasukModel::create([
-                    'id_barang'     => $item['id_barang'],
-                    'id_customer'   => $item['id_customer'],
-                    'jumlah_isi'    => $item['jumlah_isi'],
+                    'id_barang' => $item['id_barang'],
+                    'id_customer' => $customerId,
+                    'jumlah_isi' => $item['jumlah_isi'],
                     'jumlah_kosong' => $item['jumlah_kosong'],
-                    'keterangan'    => $item['keterangan'] ?? null,
+                    'keterangan' => $item['keterangan'] ?? null,
                     'tanggal_masuk' => $item['tanggal_masuk']
                 ]);
 
-                // 2. Update stok master barang
+                // 3. Update stok master barang
                 $barang = MasterBarangModel::findOrFail($item['id_barang']);
 
                 // Simpan stok awal sebelum penambahan
                 $stokAwalIsi = $barang->stok_tabung_isi;
                 $stokAwalKosong = $barang->stok_tabung_kosong;
 
-                $barang->stok_tabung_isi    += $item['jumlah_isi'];
+                $barang->stok_tabung_isi += $item['jumlah_isi'];
                 $barang->stok_tabung_kosong += $item['jumlah_kosong'];
                 $barang->save();
 
-                // 3. Insert riwayat stok
+                // 4. Insert riwayat stok
                 RiwayatStokModel::create([
-                    'id_barang'            => $barang->id_barang,
-                    'id_transaksi'         => $barangMasuk->id_masuk,
-                    'stok_awal_isi'        => $stokAwalIsi,
-                    'stok_awal_kosong'     => $stokAwalKosong,
-                    'tipe_transaksi'       => 'MASUK',
-                    'perubahan_isi'        => $item['jumlah_isi'],
-                    'perubahan_kosong'     => $item['jumlah_kosong'],
-                    'stok_isi_setelah'     => $barang->stok_tabung_isi,
-                    'stok_kosong_setelah'  => $barang->stok_tabung_kosong,
-                    'tanggal_transaksi'    => $item['tanggal_masuk'],
+                    'id_barang' => $barang->id_barang,
+                    'id_transaksi' => $barangMasuk->id_masuk,
+                    'stok_awal_isi' => $stokAwalIsi,
+                    'stok_awal_kosong' => $stokAwalKosong,
+                    'tipe_transaksi' => 'MASUK',
+                    'perubahan_isi' => $item['jumlah_isi'],
+                    'perubahan_kosong' => $item['jumlah_kosong'],
+                    'stok_isi_setelah' => $barang->stok_tabung_isi,
+                    'stok_kosong_setelah' => $barang->stok_tabung_kosong,
+                    'tanggal_transaksi' => $item['tanggal_masuk'],
                 ]);
 
-                $result[] = $barangMasuk;
+                // 5. Load customer data untuk response
+                $barangMasuk->load(['barang', 'customer']);
+
+                $result[] = [
+                    'barang_masuk' => $barangMasuk,
+                    'customer_id' => $customerId,
+                    'customer_name' => $item['nama_customer'],
+                ];
             }
 
             DB::commit();
 
             return response()->json([
                 'status' => true,
-                'message' => 'Barang masuk batch berhasil ditambahkan.',
+                'message' => 'Barang masuk batch berhasil ditambahkan dengan ' . count($result) . ' item(s)',
                 'data' => $result,
             ], 201);
         } catch (\Exception $e) {
@@ -173,6 +187,7 @@ class BarangMasukController extends Controller
             return response()->json([
                 'status' => false,
                 'message' => 'Terjadi kesalahan: ' . $e->getMessage(),
+                'line' => $e->getLine()
             ], 500);
         }
     }
@@ -207,15 +222,18 @@ class BarangMasukController extends Controller
     /**
      * Update the specified resource in storage.
      */
+
     public function update(Request $request, string $id)
     {
         $validator = Validator::make($request->all(), [
             'id_barang' => 'sometimes|exists:dbo_master_barang,id_barang',
-            'id_customer' => 'sometimes|exists:dbo_customer,id_customer',
+            'id_customer' => 'nullable|exists:dbo_customer,id_customer',
+            'nama_customer' => 'sometimes|string|max:255',
+            'alamat' => 'sometimes|string|max:500',
+            'email' => 'sometimes|email|max:255',
+            'no_telfon' => 'sometimes|string|max:20',
             'jumlah_isi' => 'sometimes|integer|min:0',
             'jumlah_kosong' => 'sometimes|integer|min:0',
-            'harga_satuan' => 'sometimes|numeric|min:0',
-            'status' => 'sometimes|string|in:pending,completed,cancelled',
             'keterangan' => 'nullable|string|max:255',
             'tanggal_masuk' => 'sometimes|date'
         ]);
@@ -234,71 +252,124 @@ class BarangMasukController extends Controller
             $barangMasuk = BarangMasukModel::findOrFail($id);
             $validated = $validator->validated();
 
+            // 1. HANDLE CUSTOMER UPDATE
+            $customerId = $barangMasuk->id_customer;
 
+            if (isset($validated['id_customer'])) {
+                // Jika ada id_customer baru, gunakan yang baru
+                $customerId = $validated['id_customer'];
+            } elseif (
+                isset($validated['nama_customer']) || isset($validated['alamat']) ||
+                isset($validated['email']) || isset($validated['no_telfon'])
+            ) {
+                // Jika ada update data customer, buat customer baru
+                $customerData = [];
+                if (isset($validated['nama_customer'])) $customerData['nama_customer'] = $validated['nama_customer'];
+                if (isset($validated['alamat'])) $customerData['alamat'] = $validated['alamat'];
+                if (isset($validated['email'])) $customerData['email'] = $validated['email'];
+                if (isset($validated['no_telfon'])) $customerData['no_telfon'] = $validated['no_telfon'];
 
-            // Ambil data lama untuk rollback stok
+                if (!empty($customerData)) {
+                    // Ambil data customer lama untuk fallback
+                    $oldCustomer = MasterCustomerModel::find($customerId);
+
+                    $newCustomer = MasterCustomerModel::create([
+                        'nama_customer' => $customerData['nama_customer'] ?? $oldCustomer->nama_customer,
+                        'alamat' => $customerData['alamat'] ?? $oldCustomer->alamat,
+                        'email' => $customerData['email'] ?? $oldCustomer->email,
+                        'telepon' => $customerData['no_telfon'] ?? $oldCustomer->telepon,
+                    ]);
+                    $customerId = $newCustomer->id_customer;
+                }
+            }
+
+            // 2. ROLLBACK STOK LAMA
             $oldIdBarang = $barangMasuk->id_barang;
             $oldJumlahIsi = $barangMasuk->jumlah_isi;
             $oldJumlahKosong = $barangMasuk->jumlah_kosong;
 
-            // Rollback stok lama
-            $oldMasterBarang = MasterBarangModel::where('id_barang', $oldIdBarang)->first();
-            $oldMasterBarang->update([
-                'stok_tabung_isi' => $oldMasterBarang->stok_tabung_isi - $oldJumlahIsi,
-                'stok_tabung_kosong' => $oldMasterBarang->stok_tabung_kosong - $oldJumlahKosong
-            ]);
+            $oldMasterBarang = MasterBarangModel::findOrFail($oldIdBarang);
+            $oldMasterBarang->stok_tabung_isi -= $oldJumlahIsi;
+            $oldMasterBarang->stok_tabung_kosong -= $oldJumlahKosong;
+            $oldMasterBarang->save();
 
-            // Apply data baru
+            // 3. APPLY DATA BARU
             $newIdBarang = $validated['id_barang'] ?? $oldIdBarang;
             $newJumlahIsi = $validated['jumlah_isi'] ?? $oldJumlahIsi;
             $newJumlahKosong = $validated['jumlah_kosong'] ?? $oldJumlahKosong;
+            $newTanggalMasuk = $validated['tanggal_masuk'] ?? $barangMasuk->tanggal_masuk;
+            $newKeterangan = $validated['keterangan'] ?? $barangMasuk->keterangan;
 
-            $newMasterBarang = MasterBarangModel::where('id_barang', $newIdBarang)->first();
+            $newMasterBarang = MasterBarangModel::findOrFail($newIdBarang);
 
+            // Simpan stok sebelum penambahan untuk riwayat
             $stokAwalIsi = $newMasterBarang->stok_tabung_isi;
             $stokAwalKosong = $newMasterBarang->stok_tabung_kosong;
 
-
-            $stok_isi_sebelum = $newMasterBarang->stok_tabung_isi;
-            $stok_kosong_sebelum = $newMasterBarang->stok_tabung_kosong;
-
             // Update stok dengan data baru
-            $newMasterBarang->update([
-                'stok_tabung_isi' => $stok_isi_sebelum + $newJumlahIsi,
-                'stok_tabung_kosong' => $stok_kosong_sebelum + $newJumlahKosong
+            $newMasterBarang->stok_tabung_isi += $newJumlahIsi;
+            $newMasterBarang->stok_tabung_kosong += $newJumlahKosong;
+            $newMasterBarang->save();
+
+            // 4. UPDATE BARANG MASUK
+            $barangMasuk->update([
+                'id_customer' => $customerId,
+                'id_barang' => $newIdBarang,
+                'jumlah_isi' => $newJumlahIsi,
+                'jumlah_kosong' => $newJumlahKosong,
+                'tanggal_masuk' => $newTanggalMasuk,
+                'keterangan' => $newKeterangan,
             ]);
 
-            // Hitung ulang total harga jika diperlukan
-            if (isset($validated['jumlah_isi']) || isset($validated['harga_satuan'])) {
-                $harga_satuan = $validated['harga_satuan'] ?? $barangMasuk->harga_satuan;
-                $validated['total_harga'] = $newJumlahIsi * $harga_satuan;
-            }
-
-            // Update transaksi
-            $barangMasuk->update($validated);
-
-            // Update riwayat stok
-            RiwayatStokModel::where('id_transaksi', $id)
+            // 5. UPDATE RIWAYAT STOK
+            $riwayatStok = RiwayatStokModel::where('id_transaksi', $id)
                 ->where('tipe_transaksi', 'MASUK')
-                ->update([
+                ->first();
+
+            if ($riwayatStok) {
+                $riwayatStok->update([
                     'id_barang' => $newIdBarang,
                     'stok_awal_isi' => $stokAwalIsi,
                     'stok_awal_kosong' => $stokAwalKosong,
                     'perubahan_isi' => $newJumlahIsi,
                     'perubahan_kosong' => $newJumlahKosong,
-                    'stok_isi_setelah' => $stok_isi_sebelum + $newJumlahIsi,
-                    'stok_kosong_setelah' => $stok_kosong_sebelum + $newJumlahKosong,
-                    'tanggal_transaksi' => $validated['tanggal_masuk'] ?? $barangMasuk->tanggal_masuk
+                    'stok_isi_setelah' => $newMasterBarang->stok_tabung_isi,
+                    'stok_kosong_setelah' => $newMasterBarang->stok_tabung_kosong,
+                    'tanggal_transaksi' => $newTanggalMasuk
                 ]);
+            }
 
             DB::commit();
 
+            // Load relations untuk response
             $barangMasuk->load(['barang', 'customer']);
 
             return response()->json([
                 'status' => true,
                 'message' => 'Barang masuk berhasil diupdate',
-                'data' => $barangMasuk
+                'data' => [
+                    'id_masuk' => $barangMasuk->id_masuk,
+                    'id_barang' => $barangMasuk->id_barang,
+                    'id_customer' => $barangMasuk->id_customer,
+                    'jumlah_isi' => $barangMasuk->jumlah_isi,
+                    'jumlah_kosong' => $barangMasuk->jumlah_kosong,
+                    'tanggal_masuk' => $barangMasuk->tanggal_masuk,
+                    'keterangan' => $barangMasuk->keterangan,
+                    'barang' => [
+                        'id_barang' => $barangMasuk->id_barang,
+                        'kode_barang' => optional($barangMasuk->barang)->kode_barang,
+                        'nama_barang' => optional($barangMasuk->barang)->nama_barang,
+                        'stok_isi_setelah_update' => $newMasterBarang->stok_tabung_isi,
+                        'stok_kosong_setelah_update' => $newMasterBarang->stok_tabung_kosong,
+                    ],
+                    'customer' => [
+                        'id_customer' => $barangMasuk->id_customer,
+                        'nama_customer' => optional($barangMasuk->customer)->nama_customer,
+                        'alamat' => optional($barangMasuk->customer)->alamat,
+                        'email' => optional($barangMasuk->customer)->email,
+                        'no_telfon' => optional($barangMasuk->customer)->no_telfon,
+                    ],
+                ]
             ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             DB::rollBack();
@@ -310,7 +381,8 @@ class BarangMasukController extends Controller
             DB::rollBack();
             return response()->json([
                 'status' => false,
-                'message' => 'Error updating barang masuk: ' . $e->getMessage()
+                'message' => 'Error updating barang masuk: ' . $e->getMessage(),
+                'line' => $e->getLine()
             ], 500);
         }
     }
@@ -323,30 +395,82 @@ class BarangMasukController extends Controller
         DB::beginTransaction();
 
         try {
-            $barangMasuk = BarangMasukModel::with(['barang'])->findOrFail($id);
+            $barangMasuk = BarangMasukModel::with(['barang', 'customer'])->findOrFail($id);
 
-            // Rollback stok di master barang
-            $masterBarang = MasterBarangModel::where('id_barang', $barangMasuk->id_barang)->first();
+            // Simpan data untuk rollback dan response
+            $idBarang = $barangMasuk->id_barang;
+            $jumlahIsi = $barangMasuk->jumlah_isi;
+            $jumlahKosong = $barangMasuk->jumlah_kosong;
 
-            $masterBarang->update([
-                'stok_tabung_isi' => $masterBarang->stok_tabung_isi - $barangMasuk->jumlah_isi,
-                'stok_tabung_kosong' => $masterBarang->stok_tabung_kosong - $barangMasuk->jumlah_kosong
-            ]);
+            // 1. ROLLBACK STOK di master barang
+            $masterBarang = MasterBarangModel::where('id_barang', $idBarang)->first();
 
-            // Hapus riwayat stok
-            RiwayatStokModel::where('id_transaksi', $id)
+            if ($masterBarang) {
+                // Simpan stok sebelum rollback untuk informasi
+                $stokSebelumRollback = [
+                    'stok_isi' => $masterBarang->stok_tabung_isi,
+                    'stok_kosong' => $masterBarang->stok_tabung_kosong
+                ];
+
+                $masterBarang->update([
+                    'stok_tabung_isi' => $masterBarang->stok_tabung_isi - $jumlahIsi,
+                    'stok_tabung_kosong' => $masterBarang->stok_tabung_kosong - $jumlahKosong
+                ]);
+
+                // Validasi stok tidak negatif
+                if ($masterBarang->stok_tabung_isi < 0) {
+                    throw new \Exception("Rollback stok isi akan menghasilkan nilai negatif ({$masterBarang->stok_tabung_isi})");
+                }
+                if ($masterBarang->stok_tabung_kosong < 0) {
+                    throw new \Exception("Rollback stok kosong akan menghasilkan nilai negatif ({$masterBarang->stok_tabung_kosong})");
+                }
+            }
+
+            // 2. HAPUS RIWAYAT STOK yang terkait
+            $deletedRiwayat = RiwayatStokModel::where('id_transaksi', $id)
                 ->where('tipe_transaksi', 'MASUK')
+                ->where('id_barang', $idBarang)
                 ->delete();
 
-            // Hapus transaksi
+            // 3. HAPUS BARANG MASUK
+            $deletedData = [
+                'id_masuk' => $barangMasuk->id_masuk,
+                'id_barang' => $idBarang,
+                'id_customer' => $barangMasuk->id_customer,
+                'jumlah_isi' => $jumlahIsi,
+                'jumlah_kosong' => $jumlahKosong,
+                'tanggal_masuk' => $barangMasuk->tanggal_masuk,
+                'keterangan' => $barangMasuk->keterangan,
+                'barang' => [
+                    'kode_barang' => optional($barangMasuk->barang)->kode_barang,
+                    'nama_barang' => optional($barangMasuk->barang)->nama_barang,
+                ],
+                'customer' => [
+                    'nama_customer' => optional($barangMasuk->customer)->nama_customer,
+                    'alamat' => optional($barangMasuk->customer)->alamat,
+                ]
+            ];
+
             $barangMasuk->delete();
 
             DB::commit();
 
             return response()->json([
                 'status' => true,
-                'message' => 'Barang masuk berhasil dihapus',
-                'data' => $barangMasuk
+                'message' => 'Barang masuk berhasil dihapus dan stok telah di-rollback',
+                'data' => [
+                    'deleted_item' => $deletedData,
+                    'rollback_info' => [
+                        'jumlah_isi_dikurangi' => $jumlahIsi,
+                        'jumlah_kosong_dikurangi' => $jumlahKosong,
+                        'stok_sebelum_rollback' => $stokSebelumRollback ?? null,
+                        'stok_setelah_rollback' => [
+                            'stok_isi' => $masterBarang ? $masterBarang->stok_tabung_isi : 0,
+                            'stok_kosong' => $masterBarang ? $masterBarang->stok_tabung_kosong : 0,
+                        ]
+                    ],
+                    'riwayat_stok_dihapus' => $deletedRiwayat > 0 ? 'Ya' : 'Tidak ada'
+                ]
             ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             DB::rollBack();
@@ -358,7 +482,8 @@ class BarangMasukController extends Controller
             DB::rollBack();
             return response()->json([
                 'status' => false,
-                'message' => 'Error deleting barang masuk: ' . $e->getMessage()
+                'message' => 'Error deleting barang masuk: ' . $e->getMessage(),
+                'line' => $e->getLine()
             ], 500);
         }
     }

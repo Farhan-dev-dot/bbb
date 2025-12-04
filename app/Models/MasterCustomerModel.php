@@ -12,10 +12,10 @@ class MasterCustomerModel extends Model
 
     protected $fillable = [
         'id_customer',
-        'kode_customer',
         'nama_customer',
         'alamat',
         'telepon',
+        'email',
         'updated_at',
         'created_at',
     ];
