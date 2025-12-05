@@ -1,0 +1,56 @@
+# Ignore version control
+.git
+.gitignore
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore Laravel cache and logs
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+
+# Ignore vendor dependencies (will be installed in container)
+vendor/
+node_modules/
+
+# Ignore environment files
+.env
+.env.*
+
+# Ignore test files
+tests/
+phpunit.xml
+
+# Ignore documentation
+*.md
+LICENSE
+
+# Ignore build artifacts
+public/build/*
+public/hot
+
+# Ignore development files
+webpack.mix.js
+vite.config.js
+package.json
+package-lock.json
+composer.lock
+
+# Ignore temporary files
+*.tmp
+*.temp
+*.log
+
+# Ignore backup files
+*.bak
+*.backup
