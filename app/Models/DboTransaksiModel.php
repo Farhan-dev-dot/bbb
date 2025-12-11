@@ -13,47 +13,24 @@ class DboTransaksiModel extends Model
 
     protected $fillable = [
         'no_transaksi',
-        'id_barang',
-        'id_customer',
         'tanggal_transaksi',
         'jenis_transaksi',
         'jumlah_tabung_isi',
         'jumlah_tabung_kosong',
         'jumlah_pinjam_tabung',
-        'harga_satuan',
-        'subtotal',
-        'diskon',
         'total_harga',
         'metode_pembayaran',
-        'status_pembayaran',
-        'jumlah_dibayar',
-        'sisa_hutang',
-        'status_transaksi',
         'alamat_pengiriman',
-        'biaya_pengiriman',
         'nama_pengirim',
-        'tanggal_pengiriman',
-        'status_pengiriman',
-        'keterangan',
-        'catatan_internal',
-        'id_barang_keluar',
-        'created_by',
-        'updated_by'
+        'keterangan'
     ];
 
     protected $casts = [
-        'tanggal_transaksi' => 'datetime',
-        'tanggal_pengiriman' => 'datetime',
+        'tanggal_transaksi' => 'date',
         'jumlah_tabung_isi' => 'integer',
         'jumlah_tabung_kosong' => 'integer',
         'jumlah_pinjam_tabung' => 'integer',
-        'harga_satuan' => 'decimal:2',
-        'subtotal' => 'decimal:2',
-        'diskon' => 'decimal:2',
         'total_harga' => 'decimal:2',
-        'jumlah_dibayar' => 'decimal:2',
-        'sisa_hutang' => 'decimal:2',
-        'biaya_pengiriman' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime'
     ];
@@ -63,7 +40,6 @@ class DboTransaksiModel extends Model
      */
     protected $dates = [
         'tanggal_transaksi',
-        'tanggal_pengiriman',
         'created_at',
         'updated_at'
     ];
@@ -165,19 +141,7 @@ class DboTransaksiModel extends Model
         return $badges[$this->status_transaksi] ?? ['class' => 'light', 'text' => 'Unknown'];
     }
 
-    /**
-     * Accessor untuk status pembayaran badge
-     */
-    public function getPaymentBadgeAttribute()
-    {
-        $badges = [
-            'lunas' => ['class' => 'success', 'text' => 'Lunas'],
-            'belum_lunas' => ['class' => 'danger', 'text' => 'Belum Lunas'],
-            'cicilan' => ['class' => 'warning', 'text' => 'Cicilan']
-        ];
 
-        return $badges[$this->status_pembayaran] ?? ['class' => 'light', 'text' => 'Unknown'];
-    }
 
     /**
      * Mutator untuk auto generate nomor transaksi jika kosong
@@ -196,90 +160,5 @@ class DboTransaksiModel extends Model
         } else {
             $this->attributes['no_transaksi'] = $value;
         }
-    }
-
-    /**
-     * Mutator untuk auto hitung subtotal
-     */
-    public function setSubtotalAttribute($value)
-    {
-        if ($value === null || $value === 0) {
-            $this->attributes['subtotal'] = $this->jumlah_tabung_isi * $this->harga_satuan;
-        } else {
-            $this->attributes['subtotal'] = $value;
-        }
-    }
-
-    /**
-     * Mutator untuk auto hitung total harga
-     */
-    public function setTotalHargaAttribute($value)
-    {
-        if ($value === null || $value === 0) {
-            $subtotal = $this->subtotal ?? ($this->jumlah_tabung_isi * $this->harga_satuan);
-            $diskon = $this->diskon ?? 0;
-            $biaya_pengiriman = $this->biaya_pengiriman ?? 0;
-            $this->attributes['total_harga'] = $subtotal - $diskon + $biaya_pengiriman;
-        } else {
-            $this->attributes['total_harga'] = $value;
-        }
-    }
-
-    /**
-     * Boot method untuk auto calculation
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($model) {
-            // Auto calculate subtotal jika belum ada
-            if (empty($model->subtotal)) {
-                $model->subtotal = $model->jumlah_tabung_isi * $model->harga_satuan;
-            }
-
-            // Auto calculate total harga jika belum ada
-            if (empty($model->total_harga)) {
-                $model->total_harga = $model->subtotal - ($model->diskon ?? 0) + ($model->biaya_pengiriman ?? 0);
-            }
-
-            // Auto calculate sisa hutang
-            $model->sisa_hutang = $model->total_harga - ($model->jumlah_dibayar ?? 0);
-
-            // Auto set status pembayaran
-            if ($model->sisa_hutang <= 0) {
-                $model->status_pembayaran = 'lunas';
-                $model->sisa_hutang = 0;
-            } elseif (($model->jumlah_dibayar ?? 0) > 0) {
-                $model->status_pembayaran = 'cicilan';
-            } else {
-                $model->status_pembayaran = 'belum_lunas';
-            }
-        });
-
-        static::updating(function ($model) {
-            // Auto recalculate pada update
-            if ($model->isDirty(['jumlah_tabung_isi', 'harga_satuan'])) {
-                $model->subtotal = $model->jumlah_tabung_isi * $model->harga_satuan;
-            }
-
-            if ($model->isDirty(['subtotal', 'diskon', 'biaya_pengiriman'])) {
-                $model->total_harga = $model->subtotal - ($model->diskon ?? 0) + ($model->biaya_pengiriman ?? 0);
-            }
-
-            if ($model->isDirty(['total_harga', 'jumlah_dibayar'])) {
-                $model->sisa_hutang = $model->total_harga - ($model->jumlah_dibayar ?? 0);
-
-                // Auto update status pembayaran
-                if ($model->sisa_hutang <= 0) {
-                    $model->status_pembayaran = 'lunas';
-                    $model->sisa_hutang = 0;
-                } elseif (($model->jumlah_dibayar ?? 0) > 0) {
-                    $model->status_pembayaran = 'cicilan';
-                } else {
-                    $model->status_pembayaran = 'belum_lunas';
-                }
-            }
-        });
     }
 }

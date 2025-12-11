@@ -2,62 +2,63 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class BarangKeluarModel extends Model
 {
-    use HasFactory;
-
     protected $table = 'dbo_barang_keluar';
     protected $primaryKey = 'id_keluar';
-    public $incrementing = true;
-    protected $keyType = 'int';
 
     protected $fillable = [
         'id_transaksi',
         'id_barang',
         'id_customer',
         'nama_pengirim',
+        'tanggal_keluar',
         'jumlah_isi',
         'jumlah_kosong',
         'pinjam_tabung',
         'harga_satuan',
         'total_harga',
         'status',
-        'keterangan',
-        'tanggal_keluar',
-        'created_at'
+        'keterangan'
     ];
 
     protected $casts = [
-        'tanggal_keluar' => 'datetime',
-        'created_at' => 'timestamp'
+        'tanggal_keluar' => 'date',
+        'harga_satuan' => 'decimal:2',
+        'diskon_item' => 'decimal:2',
+        'subtotal_item' => 'decimal:2',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
 
-    /**
-     * Relationship dengan MasterBarangModel
-     */
-    public function barang()
+    // Relasi ke transaksi
+    public function transaksi()
     {
-        return $this->belongsTo(MasterBarangModel::class, 'id_barang', 'id_barang');
+        return $this->belongsTo(TransaksiModel::class, 'id_transaksi', 'id_transaksi');
     }
 
-    /**
-     * Relationship dengan CustomerModel
-     */
-    public function customer()
-    {
-        return $this->belongsTo(MasterCustomerModel::class, 'id_customer', 'id_customer');
-    }
-
+    // Alias untuk transaksi (untuk compatibility)
     public function transaksipengiriman()
     {
         return $this->belongsTo(DboTransaksiModel::class, 'id_transaksi', 'id_transaksi');
     }
 
-    public function riwayatstok()
+    // Relasi ke master barang
+    public function barang()
     {
-        return $this->hasMany(RiwayatStokModel::class, 'id_barang', 'id_barang');
+        return $this->belongsTo(MasterBarangModel::class, 'id_barang', 'id_barang');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(CustomerModel::class, 'id_customer', 'id_customer');
+    }
+
+    // Relasi ke riwayat stok
+    public function riwayatStok()
+    {
+        return $this->hasMany(RiwayatStokModel::class, 'id_keluar', 'id_keluar');
     }
 }

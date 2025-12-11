@@ -130,7 +130,6 @@ class BarangKeluarController extends Controller
             'email' => 'required_without:id_customer|email|max:255',
             'telepon' => 'required_without:id_customer|string|max:20',
             'tanggal_transaksi' => 'required|date',
-            'jenis_transaksi' => 'required|in:penjualan,retur,tukar_tabung,koreksi',
             'metode_pembayaran' => 'required',
             'items' => 'required|array|min:1',
             'items.*.id_barang' => 'required|exists:dbo_master_barang,id_barang',
@@ -138,7 +137,6 @@ class BarangKeluarController extends Controller
             'items.*.jumlah_kosong' => 'required|integer|min:0',
             'items.*.jumlah_pinjam_tabung' => 'nullable|integer|min:0',
             'items.*.harga_satuan' => 'required|numeric|min:0',
-            'items.*.diskon' => 'nullable|numeric|min:0',
             'items.*.keterangan' => 'nullable|string|max:255',
         ]);
 
@@ -191,43 +189,31 @@ class BarangKeluarController extends Controller
             $hargaSatuanTransaksi = $items[0]['harga_satuan'] ?? 0;
 
             foreach ($items as $item) {
-                $subtotal = $item['jumlah_isi'] * $item['harga_satuan'];
-                $diskon = $item['diskon'] ?? 0;
-                $totalHarga = $subtotal - $diskon;
+                $totalHarga = $item['jumlah_isi'] * $item['harga_satuan'];
 
-                $totalSubtotal += $subtotal;
-                $totalDiskon += $diskon;
+                $totalSubtotal += $totalHarga;
                 $totalKeseluruhan += $totalHarga;
                 $totalJumlahIsi += $item['jumlah_isi'];
                 $totalJumlahKosong += $item['jumlah_kosong'];
                 $totalPinjamTabung += $item['jumlah_pinjam_tabung'] ?? 0;
             }
 
-            // Tambahkan biaya pengiriman ke total
-            $biayaPengiriman = $request->biaya_pengiriman ?? 0;
-            $grandTotal = $totalKeseluruhan + $biayaPengiriman;
+            // Total harga
+            $grandTotal = $totalKeseluruhan;
 
-            // 2. BUAT TRANSAKSI HEADER (1 kali saja) - TANPA id_barang
+            // 2. BUAT TRANSAKSI HEADER (1 kali saja)
             $transaksiHeader = DboTransaksiModel::create([
                 'no_transaksi' => $noTransaksi,
-                'id_customer' => $customerId, // Gunakan customer ID yang sudah di-handle
-                'id_barang' => null,
+                'id_customer' => $customerId,
                 'tanggal_transaksi' => $request->tanggal_transaksi,
-                'jenis_transaksi' => $request->jenis_transaksi,
                 'jumlah_tabung_isi' => $totalJumlahIsi,
                 'jumlah_tabung_kosong' => $totalJumlahKosong,
                 'jumlah_pinjam_tabung' => $totalPinjamTabung,
-                'harga_satuan' => $hargaSatuanTransaksi,
-                'subtotal' => $totalSubtotal,
-                'diskon' => $totalDiskon,
                 'total_harga' => $grandTotal,
                 'metode_pembayaran' => $request->metode_pembayaran,
-                'status_pembayaran' => $request->status_pembayaran,
-                'jumlah_dibayar' => $request->status_pembayaran === 'lunas' ? $grandTotal : 0,
-                'sisa_hutang' => $request->status_pembayaran === 'lunas' ? 0 : $grandTotal,
+                'jumlah_dibayar' => $request->jumlah_dibayar ?? 0,
                 'status_transaksi' => 'pending',
                 'alamat_pengiriman' => $request->alamat_pengiriman,
-                'biaya_pengiriman' => $biayaPengiriman,
                 'nama_pengirim' => $request->nama_pengirim,
                 'status_pengiriman' => 'belum_kirim',
                 'keterangan' => $request->keterangan,
@@ -235,9 +221,7 @@ class BarangKeluarController extends Controller
 
             // 3. PROSES SETIAP ITEM
             foreach ($items as $item) {
-                $subtotal = $item['jumlah_isi'] * $item['harga_satuan'];
-                $diskon = $item['diskon'] ?? 0;
-                $totalHarga = $subtotal - $diskon;
+                $totalHarga = $item['jumlah_isi'] * $item['harga_satuan'];
 
                 // Ambil data barang untuk cek stok awal
                 $barang = MasterBarangModel::find($item['id_barang']);
@@ -286,7 +270,6 @@ class BarangKeluarController extends Controller
                     'id_barang' => $item['id_barang'],
                     'id_transaksi' => $transaksiHeader->id_transaksi,
                     'tipe_transaksi' => 'KELUAR',
-                    'jenis_transaksi' => $request->jenis_transaksi,
                     'perubahan_isi' => -$item['jumlah_isi'],
                     'perubahan_kosong' => -$item['jumlah_kosong'],
                     'stok_awal_isi' => $stokIsiSebelum,
@@ -315,11 +298,7 @@ class BarangKeluarController extends Controller
                     ],
                     'items' => $barangKeluarData,
                     'total_items' => count($items),
-                    'subtotal' => $totalSubtotal,
-                    'total_diskon' => $totalDiskon,
-                    'biaya_pengiriman' => $biayaPengiriman,
                     'grand_total' => $grandTotal,
-                    'status_pembayaran' => $request->status_pembayaran,
                 ]
             ], 201);
         } catch (\Exception $e) {
@@ -373,11 +352,8 @@ class BarangKeluarController extends Controller
                 'transaksi' => [
                     'id_transaksi' => optional($barangKeluar->transaksipengiriman)->id_transaksi,
                     'no_transaksi' => optional($barangKeluar->transaksipengiriman)->no_transaksi,
-                    'jenis_transaksi' => optional($barangKeluar->transaksipengiriman)->jenis_transaksi,
                     'metode_pembayaran' => optional($barangKeluar->transaksipengiriman)->metode_pembayaran,
-                    'status_pembayaran' => optional($barangKeluar->transaksipengiriman)->status_pembayaran,
                     'total_harga' => optional($barangKeluar->transaksipengiriman)->total_harga,
-                    'biaya_pengiriman' => optional($barangKeluar->transaksipengiriman)->biaya_pengiriman,
                     'alamat_pengiriman' => optional($barangKeluar->transaksipengiriman)->alamat_pengiriman,
                 ]
             ];
@@ -420,13 +396,10 @@ class BarangKeluarController extends Controller
             'jumlah_kosong' => 'sometimes|integer|min:0',
             'pinjam_tabung' => 'sometimes|integer|min:0',
             'harga_satuan' => 'sometimes|numeric|min:0',
-            'diskon' => 'sometimes|numeric|min:0',
             'keterangan' => 'nullable|string|max:255',
             'tanggal_transaksi' => 'sometimes|date',
             'nama_pengirim' => 'sometimes|string|max:150',
             'metode_pembayaran' => 'sometimes|string|max:50',
-            'status_pembayaran' => 'sometimes|string|max:50',
-            'biaya_pengiriman' => 'sometimes|numeric|min:0',
             'alamat_pengiriman' => 'sometimes|string|max:500',
         ]);
 
@@ -483,7 +456,6 @@ class BarangKeluarController extends Controller
             $newJumlahKosong = $validated['jumlah_kosong'] ?? $oldJumlahKosong;
             $newPinjam = $validated['pinjam_tabung'] ?? $barangKeluar->pinjam_tabung;
             $newHargaSatuan = $validated['harga_satuan'] ?? $barangKeluar->harga_satuan;
-            $newDiskon = $validated['diskon'] ?? 0;
             $newKeterangan = $validated['keterangan'] ?? $barangKeluar->keterangan;
             $newTanggal = $validated['tanggal_transaksi'] ?? $barangKeluar->tanggal_keluar;
             $newNamaPengirim = $validated['nama_pengirim'] ?? $barangKeluar->nama_pengirim;
@@ -522,8 +494,7 @@ class BarangKeluarController extends Controller
             }
 
             // 7. HITUNG ULANG HARGA
-            $subtotal = $newJumlahIsi * $newHargaSatuan;
-            $totalHarga = $subtotal - $newDiskon;
+            $totalHarga = $newJumlahIsi * $newHargaSatuan;
 
             // 8. UPDATE BARANG KELUAR
             $barangKeluar->update([
@@ -544,13 +515,10 @@ class BarangKeluarController extends Controller
             if ($header) {
                 $allItems = BarangKeluarModel::where('id_transaksi', $header->id_transaksi)->get();
 
-                $newBiayaPengiriman = $validated['biaya_pengiriman'] ?? $header->biaya_pengiriman;
                 $newAlamatPengiriman = $validated['alamat_pengiriman'] ?? $header->alamat_pengiriman;
                 $newMetodePembayaran = $validated['metode_pembayaran'] ?? $header->metode_pembayaran;
-                $newStatusPembayaran = $validated['status_pembayaran'] ?? $header->status_pembayaran;
 
-                $newSubtotal = $allItems->sum('total_harga');
-                $newGrandTotal = $newSubtotal + $newBiayaPengiriman;
+                $newGrandTotal = $allItems->sum('total_harga');
 
                 $header->update([
                     'id_customer' => $customerId,
@@ -558,15 +526,10 @@ class BarangKeluarController extends Controller
                     'jumlah_tabung_isi' => $allItems->sum('jumlah_isi'),
                     'jumlah_tabung_kosong' => $allItems->sum('jumlah_kosong'),
                     'jumlah_pinjam_tabung' => $allItems->sum('pinjam_tabung'),
-                    'subtotal' => $newSubtotal,
                     'total_harga' => $newGrandTotal,
-                    'biaya_pengiriman' => $newBiayaPengiriman,
                     'alamat_pengiriman' => $newAlamatPengiriman,
                     'metode_pembayaran' => $newMetodePembayaran,
-                    'status_pembayaran' => $newStatusPembayaran,
                     'nama_pengirim' => $newNamaPengirim,
-                    'jumlah_dibayar' => $newStatusPembayaran === 'lunas' ? $newGrandTotal : ($header->jumlah_dibayar ?? 0),
-                    'sisa_hutang' => $newStatusPembayaran === 'lunas' ? 0 : $newGrandTotal - ($header->jumlah_dibayar ?? 0),
                 ]);
             }
 
@@ -664,16 +627,13 @@ class BarangKeluarController extends Controller
                     $newTotalIsi = $remainingItems->sum('jumlah_isi');
                     $newTotalKosong = $remainingItems->sum('jumlah_kosong');
                     $newTotalPinjam = $remainingItems->sum('pinjam_tabung');
-                    $newSubtotal = $remainingItems->sum('total_harga');
-                    $newGrandTotal = $newSubtotal + $header->biaya_pengiriman;
+                    $newGrandTotal = $remainingItems->sum('total_harga');
 
                     $header->update([
                         'jumlah_tabung_isi' => $newTotalIsi,
                         'jumlah_tabung_kosong' => $newTotalKosong,
                         'jumlah_pinjam_tabung' => $newTotalPinjam,
-                        'subtotal' => $newSubtotal,
                         'total_harga' => $newGrandTotal,
-                        'sisa_hutang' => $header->status_pembayaran === 'lunas' ? 0 : $newGrandTotal - ($header->jumlah_dibayar ?? 0),
                     ]);
                 }
             }

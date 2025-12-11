@@ -29,45 +29,54 @@ class MasterBarangModel extends Model
         'stok_minimum' => 'integer',
     ];
 
-    const CREATED_AT = 'created_at';
-    const UPDATED_AT = 'updated_at';
-
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($barang) {
-
-            // 1. Bagian awal kode barang
             $awalanKode = "BRG";
-
-            // 2. Tahun saat ini
             $tahunSekarang = date('Y');
 
-            // 3. Ambil kode terakhir berdasarkan kolom 'id_barang'
             $kodeSebelumnya = DB::table('dbo_master_barang')
                 ->whereYear('created_at', $tahunSekarang)
                 ->orderBy('id_barang', 'desc')
                 ->value('kode_barang');
 
-            // 4. Tentukan nomor urut berikutnya
             if ($kodeSebelumnya === null) {
-
-                // Jika belum ada data → mulai dari 1
                 $nomorUrut = 1;
             } else {
-
-                // Ambil 4 digit paling belakang lalu +1
                 $nomorUrut = intval(substr($kodeSebelumnya, -4)) + 1;
             }
 
-            // 5. Format kode, contoh: BRG-2025-0001
             $kodeBaru = $awalanKode
                 . "-" . $tahunSekarang
                 . "-" . str_pad($nomorUrut, 4, "0", STR_PAD_LEFT);
 
-            // 6. Simpan kode_barang otomatis
             $barang->kode_barang = $kodeBaru;
         });
+    }
+
+    // Relasi ke barang keluar
+    public function barangKeluar()
+    {
+        return $this->hasMany(BarangKeluarModel::class, 'id_barang', 'id_barang');
+    }
+
+    // Relasi ke barang masuk
+    public function barangMasuk()
+    {
+        return $this->hasMany(BarangMasukModel::class, 'id_barang', 'id_barang');
+    }
+
+    // Relasi ke riwayat stok
+    public function riwayatStok()
+    {
+        return $this->hasMany(RiwayatStokModel::class, 'id_barang', 'id_barang');
+    }
+
+    // Relasi ke stok opname
+    public function stokOpname()
+    {
+        return $this->hasMany(StokOpnameModel::class, 'id_barang', 'id_barang');
     }
 }

@@ -66,11 +66,14 @@ Route::middleware('auth:api')->group(function () {
 
     // 3. STOK OPNAME - Koreksi stok berdasarkan fisik
     Route::prefix('stok-opname')->group(function () {
-        Route::get('/', [StokOpnameController::class, 'index']);
-        Route::get('/current-stok', [StokOpnameController::class, 'getCurrentStok']);
-        Route::post('/koreksi', [StokOpnameController::class, 'koreksiStok']);
-        Route::get('/laporanstok', [StokOpnameController::class, 'laporanStok']);
-        Route::get('/stok-minimum', [StokOpnameController::class, 'stokMinimum']);
+        Route::get('/', [StokOpnameController::class, 'index']);                    // List semua opname dengan filter
+        Route::get('/current-stok', [StokOpnameController::class, 'getCurrentStok']); // Stok REAL-TIME untuk koreksi
+        Route::get('/detail-barang/{id_barang}', [StokOpnameController::class, 'getDetailBarang']); // Detail barang untuk form
+        Route::get('/history/{id_barang}', [StokOpnameController::class, 'historyOpname']); // History opname per barang
+        Route::post('/koreksi', [StokOpnameController::class, 'koreksiStok']);      // Lakukan koreksi stok
+        Route::get('/laporanstok', [StokOpnameController::class, 'laporanStok']);   // Laporan semua record opname
+        Route::get('/stok-minimum', [StokOpnameController::class, 'stokMinimum']);  // Barang stok minimum
+        Route::delete('/hapus/{id_riwayat}', [StokOpnameController::class, 'destroy']); // Hapus & rollback opname
     });
 
     // 4. LAPORAN STOK DAN TRANSAKSI

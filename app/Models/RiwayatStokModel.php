@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class RiwayatStokModel extends Model
 {
     protected $table = 'dbo_riwayat_stok';
-
     protected $primaryKey = 'id_riwayat';
 
     protected $fillable = [
@@ -20,53 +19,43 @@ class RiwayatStokModel extends Model
         'stok_awal_kosong',
         'stok_isi_setelah',
         'stok_kosong_setelah',
-        'tanggal_transaksi'
+        'tanggal_transaksi',
+        'keterangan'
     ];
 
     protected $casts = [
-        'tanggal_transaksi' => 'datetime',
-        'perubahan_isi' => 'integer',
-        'perubahan_kosong' => 'integer',
-        'stok_isi_setelah' => 'integer',
-        'stok_kosong_setelah' => 'integer'
+        'tanggal_transaksi' => 'date',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
 
-    public $timestamps = false; // karena tidak ada created_at dan updated_at
-
+    // Relasi ke master barang
     public function barang()
     {
         return $this->belongsTo(MasterBarangModel::class, 'id_barang', 'id_barang');
     }
 
+    // Relasi ke transaksi
     public function transaksi()
     {
-        return $this->belongsTo(DboTransaksiModel::class, 'id_transaksi', 'id_transaksi');
+        return $this->belongsTo(TransaksiModel::class, 'id_transaksi', 'id_transaksi');
     }
 
-
-    public function barangkeluar()
+    // Relasi ke barang keluar
+    public function barangKeluar()
     {
-        return $this->belongsTo(BarangKeluarModel::class, 'id_transaksi', 'id_keluar');
+        return $this->belongsTo(BarangKeluarModel::class, 'id_keluar', 'id_keluar');
     }
 
-    public function barangmasuk()
+    // Relasi ke barang masuk
+    public function barangMasuk()
     {
-        return $this->belongsTo(BarangMasukModel::class, 'id_transaksi', 'id_masuk');
+        return $this->belongsTo(BarangMasukModel::class, 'id_masuk', 'id_masuk');
     }
 
-    /**
-     * Scope untuk filter berdasarkan tipe transaksi
-     */
-    public function scopeTipeTransaksi($query, $tipe)
+    // Relasi ke stok opname
+    public function stokOpname()
     {
-        return $query->where('tipe_transaksi', $tipe);
-    }
-
-    /**
-     * Scope untuk filter berdasarkan tanggal
-     */
-    public function scopeTanggalRange($query, $dari, $sampai)
-    {
-        return $query->whereBetween('tanggal_transaksi', [$dari, $sampai]);
+        return $this->belongsTo(StokOpnameModel::class, 'id_opname', 'id_opname');
     }
 }

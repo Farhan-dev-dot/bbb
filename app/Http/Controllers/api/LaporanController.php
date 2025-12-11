@@ -365,39 +365,113 @@ class LaporanController extends Controller
     public function LaporanTransaksi(Request $request)
     {
         try {
+            // Query dengan JOIN untuk mendapatkan semua data
+            $query = DB::table('dbo_transaksi as t')
+                ->leftJoin('dbo_barang_keluar as bk', 't.id_transaksi', '=', 'bk.id_transaksi')
+                ->leftJoin('dbo_customer as c', 'bk.id_customer', '=', 'c.id_customer')
+                ->leftJoin('dbo_master_barang as mb', 'bk.id_barang', '=', 'mb.id_barang')
+                ->select(
+                    // Transaksi fields
+                    't.id_transaksi',
+                    't.no_transaksi',
+                    't.tanggal_transaksi',
+                    't.jenis_transaksi',
+                    't.jumlah_tabung_isi',
+                    't.jumlah_tabung_kosong',
+                    't.jumlah_pinjam_tabung',
+                    't.total_harga',
+                    't.metode_pembayaran',
+                    't.alamat_pengiriman',
+                    't.nama_pengirim',
+                    't.keterangan',
+                    // Barang keluar fields
+                    'bk.id_keluar',
+                    'bk.harga_satuan',
+                    'bk.tanggal_keluar',
+                    'bk.total_harga as total_harga_detail',
+                    'bk.jumlah_isi',
+                    'bk.jumlah_kosong',
+                    // Customer fields
+                    'c.id_customer',
+                    'c.nama_customer',
+                    'c.alamat',
+                    'c.telepon',
+                    'c.email',
+                    // Barang fields
+                    'mb.id_barang',
+                    'mb.kode_barang',
+                    'mb.nama_barang',
+                    'mb.kapasitas'
+                );
 
-            $query = RiwayatStokModel::with(['transaksi.customer', 'barang'])->where('tipe_transaksi', 'KELUAR');
             // Filter berdasarkan tanggal transaksi
             if ($request->filled('tanggal_dari') && $request->filled('tanggal_sampai')) {
-                $query->whereBetween('tanggal_transaksi', [$request->tanggal_dari, $request->tanggal_sampai]);
+                $query->whereBetween('t.tanggal_transaksi', [$request->tanggal_dari, $request->tanggal_sampai]);
             }
+
             // Filter berdasarkan ID customer
             if ($request->filled('id_customer')) {
-                $query->whereHas('transaksi', function ($q) use ($request) {
-                    $q->where('id_customer', $request->id_customer);
-                });
+                $query->where('bk.id_customer', $request->id_customer);
             }
 
+            // Filter berdasarkan tipe transaksi
             if ($request->has('tipe_transaksi')) {
-                $query->where('tipe_transaksi', $request->input('tipe_transaksi'));
+                $query->where('t.jenis_transaksi', $request->input('tipe_transaksi'));
             }
 
+            // Search keyword
             if ($request->filled('keyword')) {
                 $keyword = $request->keyword;
                 $query->where(function ($q) use ($keyword) {
-                    $q->whereHas('barang', function ($subQuery) use ($keyword) {
-                        $subQuery->where('id_barang', 'LIKE', '%' . $keyword . '%')
-                            ->orWhere('nama_barang', 'LIKE', '%' . $keyword . '%');
-                    });
+                    $q->where('t.no_transaksi', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('t.nama_pengirim', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('c.nama_customer', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('mb.nama_barang', 'LIKE', '%' . $keyword . '%');
                 });
             }
 
-            $transaksis = $query->orderBy('id_transaksi', 'desc')->get();
+            $results = $query->orderBy('t.id_transaksi', 'desc')->get();
+
+            // Transform data menjadi struktur nested untuk frontend
+            $transaksis = $results->map(function ($item) {
+                return [
+                    'transaksi' => [
+                        'id_transaksi' => $item->id_transaksi,
+                        'no_transaksi' => $item->no_transaksi,
+                        'tanggal_transaksi' => $item->tanggal_transaksi,
+                        'jenis_transaksi' => $item->jenis_transaksi,
+                        'jumlah_tabung_isi' => $item->jumlah_tabung_isi,
+                        'jumlah_tabung_kosong' => $item->jumlah_tabung_kosong,
+                        'jumlah_pinjam_tabung' => $item->jumlah_pinjam_tabung,
+                        'total_harga' => $item->total_harga,
+                        'metode_pembayaran' => $item->metode_pembayaran,
+                        'alamat_pengiriman' => $item->alamat_pengiriman,
+                        'nama_pengirim' => $item->nama_pengirim,
+                        'keterangan' => $item->keterangan,
+                        'harga_satuan' => $item->harga_satuan,
+                        'customer' => [
+                            'id_customer' => $item->id_customer,
+                            'nama_customer' => $item->nama_customer,
+                            'alamat' => $item->alamat,
+                            'telepon' => $item->telepon,
+                            'email' => $item->email
+                        ],
+                        'barang' => [
+                            'id_barang' => $item->id_barang,
+                            'kode_barang' => $item->kode_barang,
+                            'nama_barang' => $item->nama_barang,
+                            'kapasitas' => $item->kapasitas
+                        ],
+
+                    ],
+                ];
+            });
 
             return response()->json([
                 'status' => true,
                 'message' => 'Data transaksi berhasil diambil',
                 'data' => $transaksis,
+                'total' => $transaksis->count(),
                 'search_params' => [
                     'tanggal_dari' => $request->input('tanggal_dari'),
                     'tanggal_sampai' => $request->input('tanggal_sampai'),

@@ -2,48 +2,45 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class BarangMasukModel extends Model
 {
-    use HasFactory;
-
     protected $table = 'dbo_barang_masuk';
     protected $primaryKey = 'id_masuk';
-    public $incrementing = true;
-    protected $keyType = 'int';
+
+    protected $guarded = [];
 
     protected $fillable = [
         'id_barang',
         'id_customer',
+        'tanggal_masuk',
         'jumlah_isi',
         'jumlah_kosong',
-        'keterangan',
-        'tanggal_masuk',
-        'created_at'
+        'keterangan'
     ];
 
     protected $casts = [
-        'tanggal_masuk' => 'datetime',
-        'created_at' => 'timestamp'
+        'tanggal_masuk' => 'date',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
 
-    /**
-     * Relationship dengan MasterBarangModel
-     */
+    // Relasi ke master barang
     public function barang()
     {
         return $this->belongsTo(MasterBarangModel::class, 'id_barang', 'id_barang');
     }
 
+    // Relasi ke customer
     public function customer()
     {
-        return $this->belongsTo(MasterCustomerModel::class, 'id_customer', 'id_customer');
+        return $this->belongsTo(CustomerModel::class, 'id_customer', 'id_customer');
     }
 
-    public function riwayatstok()
+    // Relasi ke riwayat stok
+    public function riwayatStok()
     {
-        return $this->hasMany(RiwayatStokModel::class, 'id_barang', 'id_barang');
+        return $this->hasMany(RiwayatStokModel::class, 'id_masuk', 'id_masuk');
     }
 }
