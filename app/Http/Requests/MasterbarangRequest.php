@@ -35,13 +35,6 @@ class MasterbarangRequest extends FormRequest
         // Rules untuk update (semua field optional kecuali yang diubah)
         if ($this->isMethod('PUT') || $this->isMethod('PATCH')) {
             return [
-                'kode_barang' => [
-                    'nullable',
-                    'string',
-                    'max:50',
-                    Rule::unique('dbo_master_barang', 'kode_barang')
-                        ->ignore($barangId, 'id_barang')
-                ],
                 'nama_barang'         => 'sometimes|string|max:150',
                 'kapasitas'        => 'sometimes|string|max:50',
                 'harga_jual'       => 'sometimes|integer|min:0',
@@ -52,12 +45,6 @@ class MasterbarangRequest extends FormRequest
 
         // Rules untuk create (semua field required)
         return [
-            'kode_barang' => [
-                'nullable', // ubah dari 'required' ke 'nullable'
-                'string',
-                'max:50',
-                Rule::unique('dbo_master_barang', 'kode_barang')
-            ],
             'nama_barang'      => 'required|string|max:150',
             'kapasitas'        => 'required|string|max:50',
             'harga_jual'       => 'required|integer|min:0',

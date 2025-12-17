@@ -11,7 +11,6 @@ class RiwayatStokModel extends Model
 
     protected $fillable = [
         'id_barang',
-        'id_transaksi',
         'tipe_transaksi',
         'perubahan_isi',
         'perubahan_kosong',
@@ -35,17 +34,8 @@ class RiwayatStokModel extends Model
         return $this->belongsTo(MasterBarangModel::class, 'id_barang', 'id_barang');
     }
 
-    // Relasi ke transaksi
-    public function transaksi()
-    {
-        return $this->belongsTo(TransaksiModel::class, 'id_transaksi', 'id_transaksi');
-    }
-
-    // Relasi ke barang keluar
-    public function barangKeluar()
-    {
-        return $this->belongsTo(BarangKeluarModel::class, 'id_keluar', 'id_keluar');
-    }
+    // Note: id_transaksi is just a transaction reference ID
+    // No relation to dbo_transaksi table (table has been removed)
 
     // Relasi ke barang masuk
     public function barangMasuk()

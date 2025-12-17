@@ -12,7 +12,6 @@ class MasterBarangModel extends Model
     public $timestamps = true;
 
     protected $fillable = [
-        'kode_barang',
         'nama_barang',
         'kapasitas',
         'harga_jual',
@@ -29,32 +28,7 @@ class MasterBarangModel extends Model
         'stok_minimum' => 'integer',
     ];
 
-    protected static function boot()
-    {
-        parent::boot();
 
-        static::creating(function ($barang) {
-            $awalanKode = "BRG";
-            $tahunSekarang = date('Y');
-
-            $kodeSebelumnya = DB::table('dbo_master_barang')
-                ->whereYear('created_at', $tahunSekarang)
-                ->orderBy('id_barang', 'desc')
-                ->value('kode_barang');
-
-            if ($kodeSebelumnya === null) {
-                $nomorUrut = 1;
-            } else {
-                $nomorUrut = intval(substr($kodeSebelumnya, -4)) + 1;
-            }
-
-            $kodeBaru = $awalanKode
-                . "-" . $tahunSekarang
-                . "-" . str_pad($nomorUrut, 4, "0", STR_PAD_LEFT);
-
-            $barang->kode_barang = $kodeBaru;
-        });
-    }
 
     // Relasi ke barang keluar
     public function barangKeluar()

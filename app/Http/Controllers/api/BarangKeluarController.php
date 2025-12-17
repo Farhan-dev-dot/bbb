@@ -4,7 +4,6 @@ namespace App\Http\Controllers\api;
 
 use App\Http\Controllers\Controller;
 use App\Models\BarangKeluarModel;
-use App\Models\DboTransaksiModel;
 use App\Models\MasterBarangModel;
 use App\Models\MasterCustomerModel;
 use App\Models\RiwayatStokModel;
@@ -21,7 +20,7 @@ class BarangKeluarController extends Controller
     {
 
         try {
-            $query = BarangKeluarModel::with(['barang', 'customer', 'transaksipengiriman']);
+            $query = BarangKeluarModel::with(['barang', 'customer']);
 
             // Filter by tanggal_keluar from (tanggal mulai)
             if ($request->filled('tanggal_from')) {
@@ -42,8 +41,7 @@ class BarangKeluarController extends Controller
                 $keyword = $request->keyword;
                 $query->where(function ($q) use ($keyword) {
                     $q->whereHas('barang', function ($subQuery) use ($keyword) {
-                        $subQuery->where('kode_barang', 'LIKE', '%' . $keyword . '%')
-                            ->orWhere('nama_barang', 'LIKE', '%' . $keyword . '%');
+                        $subQuery->where('nama_barang', 'LIKE', '%' . $keyword . '%');
                     })
                         ->orWhereHas('customer', function ($subQuery) use ($keyword) {
                             $subQuery->where('nama_customer', 'LIKE', '%' . $keyword . '%');
@@ -164,18 +162,6 @@ class BarangKeluarController extends Controller
                 $customerId = $newCustomer->id_customer;
             }
 
-            // Generate nomor transaksi unik dengan locking
-            $lastTransaksi = DboTransaksiModel::whereDate('created_at', today())
-                ->lockForUpdate()
-                ->orderBy('id_transaksi', 'desc')
-                ->first();
-
-            $counter = $lastTransaksi
-                ? (int) substr($lastTransaksi->no_transaksi, -4) + 1
-                : 1;
-
-            $noTransaksi = 'TRX-' . date('Ymd') . '-' . str_pad($counter, 4, '0', STR_PAD_LEFT);
-
             $items = $request->items;
             $barangKeluarData = [];
 
@@ -198,28 +184,7 @@ class BarangKeluarController extends Controller
                 $totalPinjamTabung += $item['jumlah_pinjam_tabung'] ?? 0;
             }
 
-            // Total harga
-            $grandTotal = $totalKeseluruhan;
-
-            // 2. BUAT TRANSAKSI HEADER (1 kali saja)
-            $transaksiHeader = DboTransaksiModel::create([
-                'no_transaksi' => $noTransaksi,
-                'id_customer' => $customerId,
-                'tanggal_transaksi' => $request->tanggal_transaksi,
-                'jumlah_tabung_isi' => $totalJumlahIsi,
-                'jumlah_tabung_kosong' => $totalJumlahKosong,
-                'jumlah_pinjam_tabung' => $totalPinjamTabung,
-                'total_harga' => $grandTotal,
-                'metode_pembayaran' => $request->metode_pembayaran,
-                'jumlah_dibayar' => $request->jumlah_dibayar ?? 0,
-                'status_transaksi' => 'pending',
-                'alamat_pengiriman' => $request->alamat_pengiriman,
-                'nama_pengirim' => $request->nama_pengirim,
-                'status_pengiriman' => 'belum_kirim',
-                'keterangan' => $request->keterangan,
-            ]);
-
-            // 3. PROSES SETIAP ITEM
+            // 2. PROSES SETIAP ITEM
             foreach ($items as $item) {
                 $totalHarga = $item['jumlah_isi'] * $item['harga_satuan'];
 
@@ -235,7 +200,6 @@ class BarangKeluarController extends Controller
 
                 // Buat Barang Keluar untuk setiap item
                 $barangKeluar = BarangKeluarModel::create([
-                    'id_transaksi' => $transaksiHeader->id_transaksi,
                     'id_barang' => $item['id_barang'],
                     'id_customer' => $customerId,
                     'nama_pengirim' => $request->nama_pengirim ?? null,
@@ -244,7 +208,7 @@ class BarangKeluarController extends Controller
                     'pinjam_tabung' => $item['jumlah_pinjam_tabung'] ?? 0,
                     'harga_satuan' => $item['harga_satuan'],
                     'total_harga' => $totalHarga,
-                    'status' => $request->metode_pembayaran,
+                    'metode_pembayaran' => $item['metode_pembayaran'] ?? $request->metode_pembayaran,
                     'tanggal_keluar' => $request->tanggal_transaksi,
                     'keterangan' => $item['keterangan'] ?? null,
                 ]);
@@ -268,7 +232,6 @@ class BarangKeluarController extends Controller
 
                 RiwayatStokModel::create([
                     'id_barang' => $item['id_barang'],
-                    'id_transaksi' => $transaksiHeader->id_transaksi,
                     'tipe_transaksi' => 'KELUAR',
                     'perubahan_isi' => -$item['jumlah_isi'],
                     'perubahan_kosong' => -$item['jumlah_kosong'],
@@ -277,6 +240,7 @@ class BarangKeluarController extends Controller
                     'stok_isi_setelah' => $barang->stok_tabung_isi,
                     'stok_kosong_setelah' => $barang->stok_tabung_kosong,
                     'tanggal_transaksi' => $request->tanggal_transaksi,
+                    'keterangan' => 'Barang keluar - ID Keluar: ' . $barangKeluar->id_keluar
                 ]);
             }
 
@@ -286,9 +250,7 @@ class BarangKeluarController extends Controller
                 'status' => true,
                 'message' => 'Transaksi berhasil dibuat dengan ' . count($items) . ' item(s)',
                 'data' => [
-                    'id_transaksi' => $transaksiHeader->id_transaksi,
-                    'no_transaksi' => $noTransaksi,
-                    'tanggal_transaksi' => $transaksiHeader->tanggal_transaksi,
+                    'tanggal_transaksi' => $request->tanggal_transaksi,
                     'customer' => [
                         'id_customer' => $customerId,
                         'nama_customer' => $request->nama_customer ?? null,
@@ -298,7 +260,7 @@ class BarangKeluarController extends Controller
                     ],
                     'items' => $barangKeluarData,
                     'total_items' => count($items),
-                    'grand_total' => $grandTotal,
+                    'grand_total' => $totalKeseluruhan,
                 ]
             ], 201);
         } catch (\Exception $e) {
@@ -320,16 +282,14 @@ class BarangKeluarController extends Controller
         try {
             $barangKeluar = BarangKeluarModel::with([
                 'barang',
-                'customer',
-                'transaksipengiriman' // relasi ke DboTransaksi
+                'customer'
             ])->findOrFail($id);
-            // dd($barangKeluar);
 
             $response = [
                 'id_keluar' => $barangKeluar->id_keluar,
                 'tanggal_keluar' => $barangKeluar->tanggal_keluar,
                 'nama_pengirim' => $barangKeluar->nama_pengirim,
-                'status' => $barangKeluar->status,
+                'metode_pembayaran' => $barangKeluar->metode_pembayaran,
                 'jumlah_isi' => $barangKeluar->jumlah_isi,
                 'jumlah_kosong' => $barangKeluar->jumlah_kosong,
                 'pinjam_tabung' => $barangKeluar->pinjam_tabung,
@@ -338,7 +298,6 @@ class BarangKeluarController extends Controller
                 'keterangan' => $barangKeluar->keterangan,
                 'barang' => [
                     'id_barang' => $barangKeluar->id_barang,
-                    'kode_barang' => optional($barangKeluar->barang)->kode_barang,
                     'nama_barang' => optional($barangKeluar->barang)->nama_barang,
                 ],
                 'customer' => [
@@ -347,14 +306,6 @@ class BarangKeluarController extends Controller
                     'alamat' => optional($barangKeluar->customer)->alamat,
                     'email' => optional($barangKeluar->customer)->email,
                     'telepon' => optional($barangKeluar->customer)->telepon,
-                ],
-                // Tambahkan data transaksi header jika diperlukan
-                'transaksi' => [
-                    'id_transaksi' => optional($barangKeluar->transaksipengiriman)->id_transaksi,
-                    'no_transaksi' => optional($barangKeluar->transaksipengiriman)->no_transaksi,
-                    'metode_pembayaran' => optional($barangKeluar->transaksipengiriman)->metode_pembayaran,
-                    'total_harga' => optional($barangKeluar->transaksipengiriman)->total_harga,
-                    'alamat_pengiriman' => optional($barangKeluar->transaksipengiriman)->alamat_pengiriman,
                 ]
             ];
 
@@ -459,6 +410,7 @@ class BarangKeluarController extends Controller
             $newKeterangan = $validated['keterangan'] ?? $barangKeluar->keterangan;
             $newTanggal = $validated['tanggal_transaksi'] ?? $barangKeluar->tanggal_keluar;
             $newNamaPengirim = $validated['nama_pengirim'] ?? $barangKeluar->nama_pengirim;
+            $newMetodePembayaran = $validated['metode_pembayaran'] ?? $barangKeluar->metode_pembayaran;
 
             // 4. AMBIL BARANG BARU DAN CEK STOK
             $newBarang = MasterBarangModel::findOrFail($newIdBarang);
@@ -476,22 +428,19 @@ class BarangKeluarController extends Controller
             $newBarang->stok_tabung_kosong -= $newJumlahKosong;
             $newBarang->save();
 
-            // 6. UPDATE RIWAYAT STOK
-            $riwayatStok = RiwayatStokModel::where('id_transaksi', $barangKeluar->id_transaksi)
-                ->where('id_barang', $oldIdBarang)
-                ->where('tipe_transaksi', 'KELUAR')
-                ->first();
-
-            if ($riwayatStok) {
-                $riwayatStok->update([
-                    'id_barang' => $newIdBarang,
-                    'stok_isi_setelah' => $newBarang->stok_tabung_isi,
-                    'stok_kosong_setelah' => $newBarang->stok_tabung_kosong,
-                    'tanggal_transaksi' => $newTanggal,
-                    'perubahan_isi' => -$newJumlahIsi,
-                    'perubahan_kosong' => -$newJumlahKosong,
-                ]);
-            }
+            // 6. CREATE NEW RIWAYAT STOK (untuk update)
+            RiwayatStokModel::create([
+                'id_barang' => $newIdBarang,
+                'tipe_transaksi' => 'KELUAR',
+                'perubahan_isi' => -$newJumlahIsi,
+                'perubahan_kosong' => -$newJumlahKosong,
+                'stok_awal_isi' => $oldBarang->stok_tabung_isi,
+                'stok_awal_kosong' => $oldBarang->stok_tabung_kosong,
+                'stok_isi_setelah' => $newBarang->stok_tabung_isi,
+                'stok_kosong_setelah' => $newBarang->stok_tabung_kosong,
+                'tanggal_transaksi' => $newTanggal,
+                'keterangan' => 'Update barang keluar - ID: ' . $id
+            ]);
 
             // 7. HITUNG ULANG HARGA
             $totalHarga = $newJumlahIsi * $newHargaSatuan;
@@ -508,42 +457,19 @@ class BarangKeluarController extends Controller
                 'keterangan' => $newKeterangan,
                 'tanggal_keluar' => $newTanggal,
                 'nama_pengirim' => $newNamaPengirim,
+                'metode_pembayaran' => $newMetodePembayaran,
             ]);
-
-            // 9. UPDATE HEADER TRANSAKSI (recalculate)
-            $header = DboTransaksiModel::find($barangKeluar->id_transaksi);
-            if ($header) {
-                $allItems = BarangKeluarModel::where('id_transaksi', $header->id_transaksi)->get();
-
-                $newAlamatPengiriman = $validated['alamat_pengiriman'] ?? $header->alamat_pengiriman;
-                $newMetodePembayaran = $validated['metode_pembayaran'] ?? $header->metode_pembayaran;
-
-                $newGrandTotal = $allItems->sum('total_harga');
-
-                $header->update([
-                    'id_customer' => $customerId,
-                    'tanggal_transaksi' => $newTanggal,
-                    'jumlah_tabung_isi' => $allItems->sum('jumlah_isi'),
-                    'jumlah_tabung_kosong' => $allItems->sum('jumlah_kosong'),
-                    'jumlah_pinjam_tabung' => $allItems->sum('pinjam_tabung'),
-                    'total_harga' => $newGrandTotal,
-                    'alamat_pengiriman' => $newAlamatPengiriman,
-                    'metode_pembayaran' => $newMetodePembayaran,
-                    'nama_pengirim' => $newNamaPengirim,
-                ]);
-            }
 
             DB::commit();
 
             // Load relations untuk response
-            $barangKeluar->load(['barang', 'customer', 'transaksipengiriman']);
+            $barangKeluar->load(['barang', 'customer']);
 
             return response()->json([
                 'status' => true,
                 'message' => 'Transaksi berhasil diupdate',
                 'data' => [
                     'id_keluar' => $barangKeluar->id_keluar,
-                    'id_transaksi' => $barangKeluar->id_transaksi,
                     'tanggal_keluar' => $barangKeluar->tanggal_keluar,
                     'nama_pengirim' => $barangKeluar->nama_pengirim,
                     'jumlah_isi' => $barangKeluar->jumlah_isi,
@@ -552,9 +478,9 @@ class BarangKeluarController extends Controller
                     'harga_satuan' => $barangKeluar->harga_satuan,
                     'total_harga' => $barangKeluar->total_harga,
                     'keterangan' => $barangKeluar->keterangan,
+                    "metode_pembayaran" => $barangKeluar->metode_pembayaran,
                     'barang' => [
                         'id_barang' => $barangKeluar->id_barang,
-                        'kode_barang' => optional($barangKeluar->barang)->kode_barang,
                         'nama_barang' => optional($barangKeluar->barang)->nama_barang,
                     ],
                     'customer' => [
@@ -593,7 +519,6 @@ class BarangKeluarController extends Controller
             $idBarang = $barangKeluar->id_barang;
             $jumlahIsi = $barangKeluar->jumlah_isi;
             $jumlahKosong = $barangKeluar->jumlah_kosong;
-            $idTransaksi = $barangKeluar->id_transaksi;
 
             // 1. ROLLBACK STOK di master barang
             $masterBarang = MasterBarangModel::where('id_barang', $idBarang)->first();
@@ -604,41 +529,21 @@ class BarangKeluarController extends Controller
                 ]);
             }
 
-            // 2. HAPUS RIWAYAT STOK
-            RiwayatStokModel::where('id_transaksi', $idTransaksi)
-                ->where('id_barang', $idBarang)
-                ->where('tipe_transaksi', 'KELUAR')
-                ->delete();
+            // 2. CREATE RIWAYAT ROLLBACK (instead of deleting history)
+            RiwayatStokModel::create([
+                'id_barang' => $idBarang,
+                'tipe_transaksi' => 'KOREKSI',
+                'perubahan_isi' => $jumlahIsi,
+                'perubahan_kosong' => $jumlahKosong,
+                'stok_awal_isi' => $masterBarang->stok_tabung_isi - $jumlahIsi,
+                'stok_awal_kosong' => $masterBarang->stok_tabung_kosong - $jumlahKosong,
+                'stok_isi_setelah' => $masterBarang->stok_tabung_isi,
+                'stok_kosong_setelah' => $masterBarang->stok_tabung_kosong,
+                'tanggal_transaksi' => now(),
+                'keterangan' => 'Rollback - Hapus barang keluar ID: ' . $id
+            ]);
 
-            // 3. CEK APAKAH INI SATU-SATUNYA ITEM DALAM TRANSAKSI
-            $itemCount = BarangKeluarModel::where('id_transaksi', $idTransaksi)->count();
-
-            if ($itemCount <= 1) {
-                // Jika ini item terakhir, hapus juga header transaksi
-                DboTransaksiModel::where('id_transaksi', $idTransaksi)->delete();
-            } else {
-                // Jika masih ada item lain, recalculate header transaksi
-                $remainingItems = BarangKeluarModel::where('id_transaksi', $idTransaksi)
-                    ->where('id_keluar', '!=', $id)
-                    ->get();
-
-                $header = DboTransaksiModel::find($idTransaksi);
-                if ($header && $remainingItems->count() > 0) {
-                    $newTotalIsi = $remainingItems->sum('jumlah_isi');
-                    $newTotalKosong = $remainingItems->sum('jumlah_kosong');
-                    $newTotalPinjam = $remainingItems->sum('pinjam_tabung');
-                    $newGrandTotal = $remainingItems->sum('total_harga');
-
-                    $header->update([
-                        'jumlah_tabung_isi' => $newTotalIsi,
-                        'jumlah_tabung_kosong' => $newTotalKosong,
-                        'jumlah_pinjam_tabung' => $newTotalPinjam,
-                        'total_harga' => $newGrandTotal,
-                    ]);
-                }
-            }
-
-            // 4. HAPUS BARANG KELUAR
+            // 3. HAPUS BARANG KELUAR
             $barangKeluar->delete();
 
             DB::commit();
@@ -648,7 +553,6 @@ class BarangKeluarController extends Controller
                 'message' => 'Barang keluar berhasil dihapus',
                 'data' => [
                     'id_keluar' => $id,
-                    'id_transaksi' => $idTransaksi,
                     'id_barang' => $idBarang,
                     'jumlah_isi_dikembalikan' => $jumlahIsi,
                     'jumlah_kosong_dikembalikan' => $jumlahKosong,

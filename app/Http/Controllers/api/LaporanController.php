@@ -5,7 +5,6 @@ namespace App\Http\Controllers\api;
 use App\Http\Controllers\Controller;
 use App\Models\BarangMasukModel;
 use App\Models\BarangKeluarModel;
-use App\Models\DboTransaksiModel;
 use App\Models\MasterBarangModel;
 use App\Models\RiwayatStokModel;
 use Illuminate\Http\Request;
@@ -48,7 +47,6 @@ class LaporanController extends Controller
                 return [
                     'barang' => [
                         'id_barang' => $barang->id_barang,
-                        'kode_barang' => $barang->kode_barang,
                         'nama_barang' => $barang->nama_barang
                     ],
                     'transaksi' => $transaksi,
@@ -105,7 +103,6 @@ class LaporanController extends Controller
                 return [
                     'barang' => [
                         'id_barang' => $barang->id_barang,
-                        'kode_barang' => $barang->kode_barang,
                         'nama_barang' => $barang->nama_barang
                     ],
                     'total_transaksi' => $items->count(),
@@ -263,12 +260,12 @@ class LaporanController extends Controller
 
             // Pendapatan dari penjualan
             $pendapatan = BarangKeluarModel::whereBetween('tanggal_keluar', [$tanggalDari, $tanggalSampai])
-                ->where('status', 'completed')
+                ->where('metode_pembayaran', 'completed')
                 ->sum('total_harga');
 
             // Breakdown pendapatan per hari
             $pendapatanHarian = BarangKeluarModel::whereBetween('tanggal_keluar', [$tanggalDari, $tanggalSampai])
-                ->where('status', 'completed')
+                ->where('metode_pembayaran', 'completed')
                 ->selectRaw('DATE(tanggal_keluar) as tanggal, SUM(total_harga) as total_pendapatan, COUNT(*) as total_transaksi')
                 ->groupBy(DB::raw('DATE(tanggal_keluar)'))
                 ->orderBy('tanggal', 'asc')
@@ -277,7 +274,7 @@ class LaporanController extends Controller
             // Top 5 customer berdasarkan pembelian
             $topCustomer = BarangKeluarModel::with('customer')
                 ->whereBetween('tanggal_keluar', [$tanggalDari, $tanggalSampai])
-                ->where('status', 'completed')
+                ->where('metode_pembayaran', 'completed')
                 ->selectRaw('id_customer, SUM(total_harga) as total_pembelian, COUNT(*) as total_transaksi')
                 ->groupBy('id_customer')
                 ->orderBy('total_pembelian', 'desc')
@@ -326,7 +323,7 @@ class LaporanController extends Controller
                 'barang_masuk' => BarangMasukModel::whereDate('tanggal_masuk', now())->count(),
                 'barang_keluar' => BarangKeluarModel::whereDate('tanggal_keluar', now())->count(),
                 'pendapatan' => BarangKeluarModel::whereDate('tanggal_keluar', now())
-                    ->where('status', 'completed')
+                    ->where('metode_pembayaran', 'completed')
                     ->sum('total_harga')
             ];
 
@@ -365,32 +362,22 @@ class LaporanController extends Controller
     public function LaporanTransaksi(Request $request)
     {
         try {
-            // Query dengan JOIN untuk mendapatkan semua data
-            $query = DB::table('dbo_transaksi as t')
-                ->leftJoin('dbo_barang_keluar as bk', 't.id_transaksi', '=', 'bk.id_transaksi')
+            // Query langsung dari dbo_barang_keluar (tabel dbo_transaksi sudah dihapus)
+            $query = DB::table('dbo_barang_keluar as bk')
                 ->leftJoin('dbo_customer as c', 'bk.id_customer', '=', 'c.id_customer')
                 ->leftJoin('dbo_master_barang as mb', 'bk.id_barang', '=', 'mb.id_barang')
                 ->select(
-                    // Transaksi fields
-                    't.id_transaksi',
-                    't.no_transaksi',
-                    't.tanggal_transaksi',
-                    't.jenis_transaksi',
-                    't.jumlah_tabung_isi',
-                    't.jumlah_tabung_kosong',
-                    't.jumlah_pinjam_tabung',
-                    't.total_harga',
-                    't.metode_pembayaran',
-                    't.alamat_pengiriman',
-                    't.nama_pengirim',
-                    't.keterangan',
-                    // Barang keluar fields
+                    // Barang keluar fields (sebagai pengganti transaksi)
                     'bk.id_keluar',
-                    'bk.harga_satuan',
                     'bk.tanggal_keluar',
-                    'bk.total_harga as total_harga_detail',
+                    'bk.nama_pengirim',
                     'bk.jumlah_isi',
                     'bk.jumlah_kosong',
+                    'bk.pinjam_tabung',
+                    'bk.harga_satuan',
+                    'bk.total_harga',
+                    'bk.metode_pembayaran',
+                    'bk.keterangan',
                     // Customer fields
                     'c.id_customer',
                     'c.nama_customer',
@@ -399,14 +386,13 @@ class LaporanController extends Controller
                     'c.email',
                     // Barang fields
                     'mb.id_barang',
-                    'mb.kode_barang',
                     'mb.nama_barang',
                     'mb.kapasitas'
                 );
 
-            // Filter berdasarkan tanggal transaksi
+            // Filter berdasarkan tanggal keluar
             if ($request->filled('tanggal_dari') && $request->filled('tanggal_sampai')) {
-                $query->whereBetween('t.tanggal_transaksi', [$request->tanggal_dari, $request->tanggal_sampai]);
+                $query->whereBetween('bk.tanggal_keluar', [$request->tanggal_dari, $request->tanggal_sampai]);
             }
 
             // Filter berdasarkan ID customer
@@ -414,56 +400,58 @@ class LaporanController extends Controller
                 $query->where('bk.id_customer', $request->id_customer);
             }
 
-            // Filter berdasarkan tipe transaksi
-            if ($request->has('tipe_transaksi')) {
-                $query->where('t.jenis_transaksi', $request->input('tipe_transaksi'));
+            // Filter berdasarkan metode_pembayaran
+            if ($request->has('metode_pembayaran')) {
+                $query->where('bk.metode_pembayaran', $request->input('metode_pembayaran'));
             }
 
             // Search keyword
             if ($request->filled('keyword')) {
                 $keyword = $request->keyword;
                 $query->where(function ($q) use ($keyword) {
-                    $q->where('t.no_transaksi', 'LIKE', '%' . $keyword . '%')
-                        ->orWhere('t.nama_pengirim', 'LIKE', '%' . $keyword . '%')
+                    $q->where('bk.nama_pengirim', 'LIKE', '%' . $keyword . '%')
                         ->orWhere('c.nama_customer', 'LIKE', '%' . $keyword . '%')
-                        ->orWhere('mb.nama_barang', 'LIKE', '%' . $keyword . '%');
+                        ->orWhere('mb.nama_barang', 'LIKE', '%' . $keyword . '%')
+                        ->orWhere('bk.id_keluar', 'LIKE', '%' . $keyword . '%');
                 });
             }
 
-            $results = $query->orderBy('t.id_transaksi', 'desc')->get();
+            $results = $query->orderBy('bk.id_keluar', 'desc')->get();
 
             // Transform data menjadi struktur nested untuk frontend
             $transaksis = $results->map(function ($item) {
                 return [
                     'transaksi' => [
-                        'id_transaksi' => $item->id_transaksi,
-                        'no_transaksi' => $item->no_transaksi,
-                        'tanggal_transaksi' => $item->tanggal_transaksi,
-                        'jenis_transaksi' => $item->jenis_transaksi,
-                        'jumlah_tabung_isi' => $item->jumlah_tabung_isi,
-                        'jumlah_tabung_kosong' => $item->jumlah_tabung_kosong,
-                        'jumlah_pinjam_tabung' => $item->jumlah_pinjam_tabung,
+                        'id_keluar' => $item->id_keluar,
+                        'tanggal_transaksi' => $item->tanggal_keluar,
+                        'jumlah_tabung_isi' => $item->jumlah_isi,
+                        'jumlah_tabung_kosong' => $item->jumlah_kosong,
+                        'jumlah_pinjam_tabung' => $item->pinjam_tabung,
                         'total_harga' => $item->total_harga,
-                        'metode_pembayaran' => $item->metode_pembayaran,
-                        'alamat_pengiriman' => $item->alamat_pengiriman,
+                        'harga_satuan' => $item->harga_satuan,
                         'nama_pengirim' => $item->nama_pengirim,
                         'keterangan' => $item->keterangan,
-                        'harga_satuan' => $item->harga_satuan,
+                        'metode_pembayaran' => $item->metode_pembayaran,
                         'customer' => [
                             'id_customer' => $item->id_customer,
                             'nama_customer' => $item->nama_customer,
                             'alamat' => $item->alamat,
                             'telepon' => $item->telepon,
                             'email' => $item->email
-                        ],
-                        'barang' => [
-                            'id_barang' => $item->id_barang,
-                            'kode_barang' => $item->kode_barang,
-                            'nama_barang' => $item->nama_barang,
-                            'kapasitas' => $item->kapasitas
-                        ],
-
+                        ]
                     ],
+                    'barang' => [
+                        'id_barang' => $item->id_barang,
+                        'nama_barang' => $item->nama_barang,
+                        'kapasitas' => $item->kapasitas
+                    ],
+                    'customer' => [
+                        'id_customer' => $item->id_customer,
+                        'nama_customer' => $item->nama_customer,
+                        'alamat' => $item->alamat,
+                        'telepon' => $item->telepon,
+                        'email' => $item->email
+                    ]
                 ];
             });
 
@@ -476,7 +464,7 @@ class LaporanController extends Controller
                     'tanggal_dari' => $request->input('tanggal_dari'),
                     'tanggal_sampai' => $request->input('tanggal_sampai'),
                     'id_customer' => $request->input('id_customer'),
-                    'tipe_transaksi' => $request->input('tipe_transaksi'),
+                    'metode_pembayaran' => $request->input('metode_pembayaran'),
                     'keyword' => $request->input('keyword'),
                 ]
             ], 200);

@@ -26,16 +26,11 @@ class MasterCustomerModel extends Model
 
     public function pengiriman()
     {
-
         return $this->hasMany(BarangKeluarModel::class, 'id_customer', 'id_customer');
     }
+
     public function pemasukan()
     {
         return $this->hasMany(BarangMasukModel::class, 'id_customer', 'id_customer');
-    }
-
-    public function transaksipengiriman()
-    {
-        return $this->hasMany(DboTransaksiModel::class, 'id_customer', 'id_customer');
     }
 }

@@ -8,7 +8,6 @@ use App\Models\MasterBarangModel;
 use App\Models\RiwayatStokModel;
 use App\Models\BarangMasukModel;
 use App\Models\BarangKeluarModel;
-use App\Models\DboTransaksiModel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -139,38 +138,37 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get total pendapatan per tanggal dari dbo_transaksi
+     * Get total pendapatan per tanggal dari dbo_barang_keluar
      * Tambahkan parameter ?tanggal=YYYY-MM-DD untuk filter tanggal tertentu
      */
     public function totalPendapatanPerTanggal(Request $request)
     {
         try {
-            $query = DB::table('dbo_transaksi')
-                ->leftJoin('dbo_barang_keluar', 'dbo_transaksi.id_transaksi', '=', 'dbo_barang_keluar.id_transaksi')
+            $query = DB::table('dbo_barang_keluar as bk')
                 ->select(
-                    DB::raw('DATE(dbo_transaksi.tanggal_transaksi) as tanggal'),
-                    DB::raw('DAYNAME(DATE(dbo_transaksi.tanggal_transaksi)) as nama_hari'),
-                    DB::raw('COUNT(DISTINCT dbo_transaksi.id_transaksi) as total_transaksi'),
-                    DB::raw('COUNT(DISTINCT dbo_barang_keluar.id_customer) as total_customer'),
-                    DB::raw('SUM(dbo_transaksi.total_harga) as total_pendapatan'),
-                    DB::raw('AVG(dbo_transaksi.total_harga) as rata_rata_transaksi'),
-                    DB::raw('MAX(dbo_transaksi.total_harga) as transaksi_tertinggi'),
-                    DB::raw('MIN(dbo_transaksi.total_harga) as transaksi_terendah'),
-                    DB::raw('COUNT(CASE WHEN dbo_transaksi.metode_pembayaran = "transfer" THEN 1 END) as transaksi_transfer'),
-                    DB::raw('COUNT(CASE WHEN dbo_transaksi.metode_pembayaran = "tunai" THEN 1 END) as transaksi_tunai'),
+                    DB::raw('DATE(bk.tanggal_keluar) as tanggal'),
+                    DB::raw('DAYNAME(DATE(bk.tanggal_keluar)) as nama_hari'),
+                    DB::raw('COUNT(DISTINCT bk.id_keluar) as total_transaksi'),
+                    DB::raw('COUNT(DISTINCT bk.id_customer) as total_customer'),
+                    DB::raw('SUM(bk.total_harga) as total_pendapatan'),
+                    DB::raw('AVG(bk.total_harga) as rata_rata_transaksi'),
+                    DB::raw('MAX(bk.total_harga) as transaksi_tertinggi'),
+                    DB::raw('MIN(bk.total_harga) as transaksi_terendah'),
+                    DB::raw('SUM(bk.jumlah_isi) as total_tabung_isi'),
+                    DB::raw('SUM(bk.jumlah_kosong) as total_tabung_kosong')
                 )
-                ->whereNotNull('dbo_transaksi.tanggal_transaksi');
+                ->whereNotNull('bk.tanggal_keluar');
 
             // Filter berdasarkan bulan dan tahun jika ada
             if ($request->has('bulan') && $request->has('tahun')) {
-                $query->whereMonth('dbo_transaksi.tanggal_transaksi', $request->bulan)
-                    ->whereYear('dbo_transaksi.tanggal_transaksi', $request->tahun);
+                $query->whereMonth('bk.tanggal_keluar', $request->bulan)
+                    ->whereYear('bk.tanggal_keluar', $request->tahun);
             } elseif ($request->has('tanggal') && $request->tanggal) {
-                $query->whereDate('dbo_transaksi.tanggal_transaksi', $request->tanggal);
+                $query->whereDate('bk.tanggal_keluar', $request->tanggal);
             }
 
             $pendapatanPerTanggal = $query
-                ->groupBy(DB::raw('DATE(dbo_transaksi.tanggal_transaksi)'), DB::raw('DAYNAME(DATE(dbo_transaksi.tanggal_transaksi))'))
+                ->groupBy(DB::raw('DATE(bk.tanggal_keluar)'), DB::raw('DAYNAME(DATE(bk.tanggal_keluar))'))
                 ->orderBy('tanggal', 'desc')
                 ->limit(30)
                 ->get();
@@ -186,8 +184,8 @@ class DashboardController extends Controller
                     'rata_rata_transaksi' => (int) $item->rata_rata_transaksi,
                     'transaksi_tertinggi' => (int) $item->transaksi_tertinggi,
                     'transaksi_terendah' => (int) $item->transaksi_terendah,
-                    'transaksi_transfer' => (int) $item->transaksi_transfer,
-                    'transaksi_tunai' => (int) $item->transaksi_tunai,
+                    'total_tabung_isi' => (int) $item->total_tabung_isi,
+                    'total_tabung_kosong' => (int) $item->total_tabung_kosong,
                 ];
             });
 
@@ -211,27 +209,27 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get distribusi jenis barang berdasarkan transaksi dari dbo_transaksi
+     * Get distribusi jenis barang berdasarkan transaksi dari dbo_barang_keluar
      * Tambahkan parameter ?tanggal=YYYY-MM-DD untuk filter tanggal tertentu
      */
     public function distribusiJenisBarang(Request $request)
     {
         try {
-            // Ambil data dari dbo_transaksi yang join dengan dbo_master_barang
-            $query = DB::table('dbo_transaksi as t')
-                ->join('dbo_master_barang as b', 't.id_barang', '=', 'b.id_barang')
+            // Ambil data dari dbo_barang_keluar yang join dengan dbo_master_barang
+            $query = DB::table('dbo_barang_keluar as bk')
+                ->join('dbo_master_barang as b', 'bk.id_barang', '=', 'b.id_barang')
                 ->select(
                     'b.id_barang',
                     'b.nama_barang',
                     'b.kapasitas',
                     DB::raw('COUNT(*) as jumlah_transaksi'),
-                    DB::raw('SUM(t.total_harga) as total_revenue')
+                    DB::raw('SUM(bk.total_harga) as total_revenue')
                 )
-                ->whereNotNull('t.tanggal_transaksi');
+                ->whereNotNull('bk.tanggal_keluar');
 
             // Filter berdasarkan tanggal jika ada
             if ($request->has('tanggal') && $request->tanggal) {
-                $query->whereDate('t.tanggal_transaksi', $request->tanggal);
+                $query->whereDate('bk.tanggal_keluar', $request->tanggal);
             }
 
             $distribusiData = $query
@@ -328,13 +326,13 @@ class DashboardController extends Controller
 
             $summaryHariIni = [
                 'transaksi' => [
-                    'total' => DboTransaksiModel::whereDate('tanggal_transaksi', $tanggal)->count(),
-                    'selesai' => DboTransaksiModel::whereDate('tanggal_transaksi', $tanggal)
-                        ->where('status_transaksi', 'selesai')->count(),
-                    'pending' => DboTransaksiModel::whereDate('tanggal_transaksi', $tanggal)
-                        ->where('status_transaksi', 'pending')->count(),
-                    'pendapatan' => DboTransaksiModel::whereDate('tanggal_transaksi', $tanggal)
-                        ->where('status_transaksi', 'selesai')->sum('total_harga')
+                    'total' => BarangKeluarModel::whereDate('tanggal_keluar', $tanggal)->count(),
+                    'selesai' => BarangKeluarModel::whereDate('tanggal_keluar', $tanggal)
+                        ->where('metode_pembayaran', 'completed')->count(),
+                    'pending' => BarangKeluarModel::whereDate('tanggal_keluar', $tanggal)
+                        ->where('metode_pembayaran', 'pending')->count(),
+                    'pendapatan' => BarangKeluarModel::whereDate('tanggal_keluar', $tanggal)
+                        ->where('metode_pembayaran', 'completed')->sum('total_harga')
                 ],
                 'barang_masuk' => BarangMasukModel::whereDate('tanggal_masuk', $tanggal)->count(),
                 'barang_keluar' => BarangKeluarModel::whereDate('tanggal_keluar', $tanggal)->count()
@@ -349,23 +347,22 @@ class DashboardController extends Controller
             ')->first();
 
             // Transaksi terbaru
-            $transaksiTerbaru = DboTransaksiModel::with(['barang', 'customer'])
-                ->whereDate('tanggal_transaksi', $tanggal)
-                ->orderBy('tanggal_transaksi', 'desc')
+            $transaksiTerbaru = BarangKeluarModel::with(['barang', 'customer'])
+                ->whereDate('tanggal_keluar', $tanggal)
+                ->orderBy('tanggal_keluar', 'desc')
                 ->limit(5)
                 ->get();
 
             // Top customer bulan ini (ambil dari barang_keluar)
             $topCustomer = DB::table('dbo_barang_keluar')
                 ->join('dbo_customer', 'dbo_barang_keluar.id_customer', '=', 'dbo_customer.id_customer')
-                ->join('dbo_transaksi', 'dbo_barang_keluar.id_transaksi', '=', 'dbo_transaksi.id_transaksi')
-                ->whereMonth('dbo_transaksi.tanggal_transaksi', now()->month)
-                ->whereYear('dbo_transaksi.tanggal_transaksi', now()->year)
+                ->whereMonth('dbo_barang_keluar.tanggal_keluar', now()->month)
+                ->whereYear('dbo_barang_keluar.tanggal_keluar', now()->year)
                 ->select(
                     'dbo_customer.id_customer',
                     'dbo_customer.nama_customer',
-                    DB::raw('SUM(dbo_transaksi.total_harga) as total_pembelian'),
-                    DB::raw('COUNT(DISTINCT dbo_transaksi.id_transaksi) as total_transaksi')
+                    DB::raw('SUM(dbo_barang_keluar.total_harga) as total_pembelian'),
+                    DB::raw('COUNT(DISTINCT dbo_barang_keluar.id_keluar) as total_transaksi')
                 )
                 ->groupBy('dbo_customer.id_customer', 'dbo_customer.nama_customer')
                 ->orderByDesc('total_pembelian')
@@ -402,26 +399,25 @@ class DashboardController extends Controller
     public function totalPendapatanPerTahun(Request $request)
     {
         try {
-            $query = DB::table('dbo_transaksi')
-                ->leftJoin('dbo_barang_keluar', 'dbo_transaksi.id_transaksi', '=', 'dbo_barang_keluar.id_transaksi')
+            $query = DB::table('dbo_barang_keluar as bk')
                 ->select(
-                    DB::raw('YEAR(dbo_transaksi.tanggal_transaksi) as tahun'),
-                    DB::raw('COUNT(DISTINCT dbo_transaksi.id_transaksi) as total_transaksi'),
-                    DB::raw('COUNT(DISTINCT dbo_barang_keluar.id_customer) as total_customer'),
-                    DB::raw('SUM(dbo_transaksi.total_harga) as total_pendapatan'),
-                    DB::raw('AVG(dbo_transaksi.total_harga) as rata_rata_transaksi'),
-                    DB::raw('MAX(dbo_transaksi.total_harga) as transaksi_tertinggi'),
-                    DB::raw('MIN(dbo_transaksi.total_harga) as transaksi_terendah')
+                    DB::raw('YEAR(bk.tanggal_keluar) as tahun'),
+                    DB::raw('COUNT(DISTINCT bk.id_keluar) as total_transaksi'),
+                    DB::raw('COUNT(DISTINCT bk.id_customer) as total_customer'),
+                    DB::raw('SUM(bk.total_harga) as total_pendapatan'),
+                    DB::raw('AVG(bk.total_harga) as rata_rata_transaksi'),
+                    DB::raw('MAX(bk.total_harga) as transaksi_tertinggi'),
+                    DB::raw('MIN(bk.total_harga) as transaksi_terendah')
                 )
-                ->whereNotNull('dbo_transaksi.tanggal_transaksi');
+                ->whereNotNull('bk.tanggal_keluar');
 
             // Filter berdasarkan tanggal jika ada
             if ($request->has('tanggal') && $request->tanggal) {
-                $query->whereDate('dbo_transaksi.tanggal_transaksi', $request->tanggal);
+                $query->whereDate('bk.tanggal_keluar', $request->tanggal);
             }
 
             $pendapatanPerTahun = $query
-                ->groupBy(DB::raw('YEAR(dbo_transaksi.tanggal_transaksi)'))
+                ->groupBy(DB::raw('YEAR(bk.tanggal_keluar)'))
                 ->orderBy('tahun', 'desc')
                 ->get();
 
@@ -465,8 +461,8 @@ class DashboardController extends Controller
                 ? $request->tanggal
                 : now()->format('Y-m-d');
 
-            $totalPendapatan = DB::table('dbo_transaksi')
-                ->whereDate('tanggal_transaksi', $tanggal)
+            $totalPendapatan = DB::table('dbo_barang_keluar')
+                ->whereDate('tanggal_keluar', $tanggal)
                 ->sum('total_harga');
 
             return response()->json([
@@ -497,8 +493,8 @@ class DashboardController extends Controller
                 ? $request->tanggal
                 : now()->format('Y-m-d');
 
-            $totalTransaksi = DB::table('dbo_transaksi')
-                ->whereDate('tanggal_transaksi', $tanggal)
+            $totalTransaksi = DB::table('dbo_barang_keluar')
+                ->whereDate('tanggal_keluar', $tanggal)
                 ->count();
 
             return response()->json([

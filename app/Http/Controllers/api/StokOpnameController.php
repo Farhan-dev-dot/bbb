@@ -78,12 +78,11 @@ class StokOpnameController extends Controller
         try {
             $masterBarang = MasterBarangModel::select([
                 'id_barang',
-                'kode_barang',
+
                 'nama_barang',
                 'kapasitas',
                 'stok_tabung_isi',
                 'stok_tabung_kosong',
-                'stok_minimum'
             ])->get();
 
             // Tambahkan informasi opname terakhir untuk setiap barang
@@ -94,12 +93,10 @@ class StokOpnameController extends Controller
 
                 return [
                     'id_barang' => $barang->id_barang,
-                    'kode_barang' => $barang->kode_barang,
                     'nama_barang' => $barang->nama_barang,
                     'kapasitas' => $barang->kapasitas,
                     'stok_tabung_isi' => $barang->stok_tabung_isi,        // STOK REAL-TIME SAAT INI
                     'stok_tabung_kosong' => $barang->stok_tabung_kosong,  // STOK REAL-TIME SAAT INI
-                    'stok_minimum' => $barang->stok_minimum,
                     'last_opname' => $lastOpname ? [
                         'tanggal' => $lastOpname->tanggal_opname,
                         'created_by' => $lastOpname->created_by,
@@ -148,7 +145,6 @@ class StokOpnameController extends Controller
                 'message' => 'Detail barang berhasil diambil',
                 'data' => [
                     'id_barang' => $barang->id_barang,
-                    'kode_barang' => $barang->kode_barang,
                     'nama_barang' => $barang->nama_barang,
                     'kapasitas' => $barang->kapasitas,
                     'stok_sistem_isi' => $barang->stok_tabung_isi,      // Auto-fill ke form
@@ -305,27 +301,25 @@ class StokOpnameController extends Controller
                     'stok_tabung_kosong' => $stok_kosong_fisik
                 ]);
 
-                Log::info('Koreksi Stok - Master Barang Diupdate', [
-                    'id_barang' => $correction['id_barang'],
-                    'stok_baru_isi' => $stok_isi_fisik,
-                    'stok_baru_kosong' => $stok_kosong_fisik,
-                ]);
-
-                // // Catat riwayat stok untuk audit trail
-                // RiwayatStokModel::create([
+                // Log::info('Koreksi Stok - Master Barang Diupdate', [
                 //     'id_barang' => $correction['id_barang'],
-                //     'tanggal_transaksi' => $tanggalOpname,
-                //     'tipe_transaksi' => 'KOREKSI',
-                //     'jumlah_masuk_isi' => $selisih_isi > 0 ? $selisih_isi : 0,
-                //     'jumlah_masuk_kosong' => $selisih_kosong > 0 ? $selisih_kosong : 0,
-                //     'jumlah_keluar_isi' => $selisih_isi < 0 ? abs($selisih_isi) : 0,
-                //     'jumlah_keluar_kosong' => $selisih_kosong < 0 ? abs($selisih_kosong) : 0,
-                //     'stok_akhir_isi' => $stok_isi_fisik,
-                //     'stok_akhir_kosong' => $stok_kosong_fisik,
-                //     'keterangan' => 'Koreksi Stok Opname - ' . ($correction['keterangan'] ?? 'Penyesuaian stok fisik'),
-                //     'created_by' => $createdBy
+                //     'stok_baru_isi' => $stok_isi_fisik,
+                //     'stok_baru_kosong' => $stok_kosong_fisik,
                 // ]);
 
+                // Catat riwayat stok untuk audit trail
+                RiwayatStokModel::create([
+                    'id_barang' => $correction['id_barang'],
+                    'tipe_transaksi' => 'KOREKSI',
+                    'perubahan_isi' => $selisih_isi,
+                    'perubahan_kosong' => $selisih_kosong,
+                    'stok_awal_isi' => $stok_isi_sistem,
+                    'stok_awal_kosong' => $stok_kosong_sistem,
+                    'stok_isi_setelah' => $stok_isi_fisik,
+                    'stok_kosong_setelah' => $stok_kosong_fisik,
+                    'tanggal_transaksi' => $tanggalOpname,
+                    'keterangan' => 'Koreksi Stok Opname - ' . ($correction['keterangan'] ?? 'Penyesuaian stok fisik')
+                ]);
 
                 $results[] = [
                     'id_opname' => $stokOpname->id_opname,
@@ -426,7 +420,6 @@ class StokOpnameController extends Controller
                 $items[] = [
                     'id_opname' => $opname->id_opname,
                     'id_barang' => $opname->id_barang,
-                    'kode_barang' => $opname->barang->kode_barang ?? '-',
                     'nama_barang' => $opname->barang->nama_barang ?? '-',
                     'kapasitas' => $opname->barang->kapasitas ?? '-',
                     'tanggal_opname' => $opname->tanggal_opname,
@@ -583,7 +576,6 @@ class StokOpnameController extends Controller
                 ->orWhereRaw('stok_tabung_kosong <= stok_minimum')
                 ->select([
                     'id_barang',
-                    'kode_barang',
                     'nama_barang',
                     'kapasitas',
                     'stok_tabung_isi',

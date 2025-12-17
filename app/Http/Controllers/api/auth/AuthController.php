@@ -14,6 +14,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name'       => 'required|string|max:255',
+            'username'   => 'required|string|max:255|unique:users',
             'email'      => 'required|string|email|max:255|unique:users',
             'password'   => 'required|string|min:6|confirmed',
         ]);
@@ -24,6 +25,7 @@ class AuthController extends Controller
 
         $user = User::create([
             'name'     => $request->name,
+            'username' => $request->username,
             'email'    => $request->email,
             'password' => bcrypt($request->password),
         ]);
@@ -34,12 +36,12 @@ class AuthController extends Controller
     // Login user and return JWT token
     public function login(Request $request)
     {
-        $credentials = $request->only('email', 'password');
+        $credentials = $request->only('username', 'password');
 
         if (!$token = auth('api')->attempt($credentials)) {
             return response()->json([
                 'error' => 'Unauthorized',
-                'message' => 'email atau password salah',
+                'message' => 'Username atau password salah',
                 'status' => false
             ], 401);
         }

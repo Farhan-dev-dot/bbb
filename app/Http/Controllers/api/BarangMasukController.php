@@ -152,13 +152,11 @@ class BarangMasukController extends Controller
                 // Insert riwayat stok
                 RiwayatStokModel::create([
                     'id_barang' => $barang->id_barang,
-                    'stok_awal_isi' => $stokAwalIsi,
-                    'stok_awal_kosong' => $stokAwalKosong,
                     'tipe_transaksi' => 'MASUK',
                     'perubahan_isi' => $item['jumlah_isi'],
                     'perubahan_kosong' => $item['jumlah_kosong'],
-                    'stok_isi_awal' => $stokAwalIsi,
-                    'stok_kosong_awal' => $stokAwalKosong,
+                    'stok_awal_isi' => $stokAwalIsi,
+                    'stok_awal_kosong' => $stokAwalKosong,
                     'stok_isi_setelah' => $barang->stok_tabung_isi,
                     'stok_kosong_setelah' => $barang->stok_tabung_kosong,
                     'tanggal_transaksi' => $item['tanggal_masuk'],
@@ -279,23 +277,19 @@ class BarangMasukController extends Controller
                 'keterangan' => $newKeterangan,
             ]);
 
-            // UPDATE RIWAYAT STOK
-            $riwayatStok = RiwayatStokModel::where('id_transaksi', $id)
-                ->where('tipe_transaksi', 'MASUK')
-                ->first();
-
-            if ($riwayatStok) {
-                $riwayatStok->update([
-                    'id_barang' => $newIdBarang,
-                    'stok_awal_isi' => $stokAwalIsi,
-                    'stok_awal_kosong' => $stokAwalKosong,
-                    'perubahan_isi' => $newJumlahIsi,
-                    'perubahan_kosong' => $newJumlahKosong,
-                    'stok_isi_setelah' => $newMasterBarang->stok_tabung_isi,
-                    'stok_kosong_setelah' => $newMasterBarang->stok_tabung_kosong,
-                    'tanggal_transaksi' => $newTanggalMasuk
-                ]);
-            }
+            // CREATE NEW RIWAYAT STOK (for update tracking)
+            RiwayatStokModel::create([
+                'id_barang' => $newIdBarang,
+                'tipe_transaksi' => 'MASUK',
+                'perubahan_isi' => $newJumlahIsi,
+                'perubahan_kosong' => $newJumlahKosong,
+                'stok_awal_isi' => $stokAwalIsi,
+                'stok_awal_kosong' => $stokAwalKosong,
+                'stok_isi_setelah' => $newMasterBarang->stok_tabung_isi,
+                'stok_kosong_setelah' => $newMasterBarang->stok_tabung_kosong,
+                'tanggal_transaksi' => $newTanggalMasuk,
+                'keterangan' => 'Update barang masuk - ID: ' . $id
+            ]);
 
             DB::commit();
 
@@ -314,7 +308,6 @@ class BarangMasukController extends Controller
                     'keterangan' => $barangMasuk->keterangan,
                     'barang' => [
                         'id_barang' => $barangMasuk->id_barang,
-                        'kode_barang' => optional($barangMasuk->barang)->kode_barang,
                         'nama_barang' => optional($barangMasuk->barang)->nama_barang,
                         'stok_isi_setelah_update' => $newMasterBarang->stok_tabung_isi,
                         'stok_kosong_setelah_update' => $newMasterBarang->stok_tabung_kosong,
@@ -376,11 +369,19 @@ class BarangMasukController extends Controller
                 }
             }
 
-            // 2. HAPUS RIWAYAT STOK yang terkait
-            $deletedRiwayat = RiwayatStokModel::where('id_transaksi', $id)
-                ->where('tipe_transaksi', 'MASUK')
-                ->where('id_barang', $idBarang)
-                ->delete();
+            // 2. CREATE ROLLBACK RIWAYAT (instead of deleting history)
+            RiwayatStokModel::create([
+                'id_barang' => $idBarang,
+                'tipe_transaksi' => 'KOREKSI',
+                'perubahan_isi' => -$jumlahIsi,
+                'perubahan_kosong' => -$jumlahKosong,
+                'stok_awal_isi' => $masterBarang->stok_tabung_isi + $jumlahIsi,
+                'stok_awal_kosong' => $masterBarang->stok_tabung_kosong + $jumlahKosong,
+                'stok_isi_setelah' => $masterBarang->stok_tabung_isi,
+                'stok_kosong_setelah' => $masterBarang->stok_tabung_kosong,
+                'tanggal_transaksi' => now(),
+                'keterangan' => 'Rollback - Hapus barang masuk ID: ' . $id
+            ]);
 
             // 3. HAPUS BARANG MASUK
             $deletedData = [
@@ -392,7 +393,6 @@ class BarangMasukController extends Controller
                 'tanggal_masuk' => $barangMasuk->tanggal_masuk,
                 'keterangan' => $barangMasuk->keterangan,
                 'barang' => [
-                    'kode_barang' => optional($barangMasuk->barang)->kode_barang,
                     'nama_barang' => optional($barangMasuk->barang)->nama_barang,
                 ],
                 'customer' => [
@@ -419,7 +419,7 @@ class BarangMasukController extends Controller
                             'stok_kosong' => $masterBarang ? $masterBarang->stok_tabung_kosong : 0,
                         ]
                     ],
-                    'riwayat_stok_dihapus' => $deletedRiwayat > 0 ? 'Ya' : 'Tidak ada'
+                    'riwayat_rollback_created' => 'Ya'
                 ]
             ], 200);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {

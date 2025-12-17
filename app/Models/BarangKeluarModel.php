@@ -10,7 +10,6 @@ class BarangKeluarModel extends Model
     protected $primaryKey = 'id_keluar';
 
     protected $fillable = [
-        'id_transaksi',
         'id_barang',
         'id_customer',
         'nama_pengirim',
@@ -20,7 +19,7 @@ class BarangKeluarModel extends Model
         'pinjam_tabung',
         'harga_satuan',
         'total_harga',
-        'status',
+        'metode_pembayaran',
         'keterangan'
     ];
 
@@ -33,17 +32,8 @@ class BarangKeluarModel extends Model
         'updated_at' => 'datetime'
     ];
 
-    // Relasi ke transaksi
-    public function transaksi()
-    {
-        return $this->belongsTo(TransaksiModel::class, 'id_transaksi', 'id_transaksi');
-    }
-
-    // Alias untuk transaksi (untuk compatibility)
-    public function transaksipengiriman()
-    {
-        return $this->belongsTo(DboTransaksiModel::class, 'id_transaksi', 'id_transaksi');
-    }
+    // Note: id_transaksi is just a transaction reference ID
+    // No relation to dbo_transaksi table (table has been removed)
 
     // Relasi ke master barang
     public function barang()

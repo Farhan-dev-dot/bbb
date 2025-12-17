@@ -22,11 +22,6 @@ class MbarangController extends Controller
         try {
             $query = MasterBarangModel::query();
 
-            // Search by kode barang
-            if ($request->filled('kodekeyword')) {
-                $query->where('kode_barang', 'LIKE', '%' . $request->kodekeyword . '%');
-            }
-
             // Search by nama barang
             if ($request->filled('namakeyword')) {
                 $query->where('nama_barang', 'LIKE', '%' . $request->namakeyword . '%');
@@ -35,10 +30,7 @@ class MbarangController extends Controller
             // Global search (search in kode barang and nama barang only)
             if ($request->filled('keyword')) {
                 $keyword = $request->keyword;
-                $query->where(function ($q) use ($keyword) {
-                    $q->where('kode_barang', 'LIKE', '%' . $keyword . '%')
-                        ->orWhere('nama_barang', 'LIKE', '%' . $keyword . '%');
-                });
+                $query->where('nama_barang', 'LIKE', '%' . $keyword . '%');
             }
 
             // Sort options
@@ -48,7 +40,6 @@ class MbarangController extends Controller
             // Validate sort column to prevent SQL injection
             $allowedSortColumns = [
                 'id_barang',
-                'kode_barang',
                 'nama_barang',
                 'kapasitas',
                 'harga_jual',
@@ -205,7 +196,6 @@ class MbarangController extends Controller
                 'message' => 'Data barang berhasil diupdate',
                 'data' => [
                     'id_barang' => $updatedBarang->id_barang,
-                    'kode_barang' => $updatedBarang->kode_barang,
                     'nama_barang' => $updatedBarang->nama_barang,
                     'kapasitas' => $updatedBarang->kapasitas,
                     'harga_jual' => $updatedBarang->harga_jual,

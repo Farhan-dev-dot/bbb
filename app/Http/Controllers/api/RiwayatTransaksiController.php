@@ -16,7 +16,7 @@ class RiwayatTransaksiController extends Controller
         }
 
         try {
-            $query = RiwayatStokModel::with(['barang', 'barangkeluar', 'barangmasuk']);
+            $query = RiwayatStokModel::with(['barang']);
 
             // Filter by tanggal_masuk from (tanggal mulai)
             if ($request->filled('tanggal_dari')) {
